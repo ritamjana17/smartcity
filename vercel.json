@@ -1,0 +1,14 @@
+{
+  "regions": ["bom1"],
+  "functions": {
+    "api/analyze.js": { "maxDuration": 30 }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Permissions-Policy", "value": "camera=(self), geolocation=(self)" }
+      ]
+    }
+  ]
+}

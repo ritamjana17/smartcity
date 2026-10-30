@@ -2,690 +2,861 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0E6B45" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="theme-color" content="#0F1418" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="description" content="Point a camera at a street and let AI spot garbage, littering and traffic problems." />
+  <meta name="description" content="Point your camera at a street. CityEye spots garbage, littering and traffic problems." />
   <link rel="manifest" href="/manifest.json" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <title>CityEye</title>
   <style>
-    /* ---------- tokens: a street-signage system ---------- */
     :root{
-      --concrete:#ECEEEA;   /* page */
-      --paper:#FFFFFF;      /* surfaces */
-      --ink:#18212B;        /* text */
-      --ink-2:#55606C;      /* secondary text */
-      --rule:#D5D9D3;       /* hairlines */
-      --sign:#0E6B45;       /* highway-sign green: brand + primary */
-      --sign-ink:#FFFFFF;
-      --garbage:#E8701A;    /* safety orange */
-      --litter:#C8202F;     /* stop red */
-      --traffic:#1D5BA8;    /* sign blue */
-      --clear:#0E6B45;
-      --stage:#20262C;
-      --r-sm:8px; --r-md:12px; --r-lg:18px;
-      --shadow:0 1px 0 rgba(24,33,43,.06), 0 8px 24px -12px rgba(24,33,43,.18);
-      --font:"Overpass", system-ui, -apple-system, "Segoe UI", sans-serif;
-      color-scheme: light;
+      --sign:#0E6B45; --sign-hi:#14895A;
+      --garbage:#F07A1F; --litter:#D7263D; --traffic:#2F6FD0; --clear:#16A36A; --person:#F2F4F1;
+      --cam:#0F1418; --glass:rgba(15,20,24,.62); --glass-line:rgba(255,255,255,.14);
+      --paper:#FFFFFF; --page:#ECEEEA; --ink:#18212B; --ink-2:#5A6570; --rule:#DCE0DA;
+      --r:14px;
+      --font:"Overpass",system-ui,-apple-system,"Segoe UI",sans-serif;
+      --safe-t:env(safe-area-inset-top); --safe-b:env(safe-area-inset-bottom);
     }
     @media (prefers-color-scheme: dark){
-      :root{
-        --concrete:#1A1F24; --paper:#232A31; --ink:#E9EDE8; --ink-2:#9AA5AF;
-        --rule:#323B44; --sign:#13865A; --stage:#0F1317;
-        --shadow:0 1px 0 rgba(0,0,0,.3), 0 10px 30px -14px rgba(0,0,0,.6);
-        color-scheme: dark;
-      }
+      :root{ --paper:#1D242B; --page:#151B20; --ink:#ECEFEA; --ink-2:#9AA6B0; --rule:#2E3841; }
     }
-
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-    html{font-family:var(--font);background:var(--concrete);color:var(--ink);
-      font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%}
-    body{margin:0;min-height:100dvh;font-feature-settings:"tnum" 1}
+    html,body{margin:0;height:100%;background:var(--cam);font-family:var(--font);color:var(--ink);
+      -webkit-text-size-adjust:100%;font-feature-settings:"tnum" 1}
+    body{overflow:hidden;overscroll-behavior:none}
     button,select,input{font:inherit;color:inherit}
-    :focus-visible{outline:3px solid var(--traffic);outline-offset:2px;border-radius:6px}
-    .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+    button{cursor:pointer}
+    :focus-visible{outline:3px solid #7FB2FF;outline-offset:2px}
+    [hidden]{display:none!important}
+    svg{display:block}
 
-    /* ---------- header: a highway guide sign ---------- */
-    .topbar{padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;background:var(--concrete);
-      position:sticky;top:0;z-index:20}
-    .sign{background:var(--sign);color:var(--sign-ink);border-radius:var(--r-md);
-      padding:5px;box-shadow:var(--shadow)}
-    .sign-inner{border:2px solid rgba(255,255,255,.9);border-radius:calc(var(--r-md) - 4px);
-      display:flex;align-items:center;gap:12px;padding:8px 10px 8px 14px;min-height:52px}
-    .sign h1{margin:0;font-size:22px;font-weight:800;letter-spacing:.01em;line-height:1}
-    .sign .sub{font-size:13px;opacity:.85;font-weight:500;margin-top:3px}
-    .sign .spacer{flex:1}
-    .status{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;
-      background:rgba(255,255,255,.14);padding:7px 12px;border-radius:99px;white-space:nowrap}
-    .status i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.6)}
-    .status[data-s="live"] i{background:#FF5A5A;box-shadow:0 0 0 4px rgba(255,90,90,.25)}
-    .status[data-s="busy"] i{background:#FFD24A}
-    .icon-btn{width:44px;height:44px;border-radius:10px;border:0;background:rgba(255,255,255,.14);
-      color:inherit;display:grid;place-items:center;cursor:pointer}
-    .icon-btn:hover{background:rgba(255,255,255,.24)}
-
-    /* ---------- layout ---------- */
-    .app{max-width:1440px;margin:0 auto;padding:4px 16px 120px;display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
-    .side{min-width:0;display:grid;gap:16px}
+    /* ================= layout ================= */
+    .app{position:fixed;inset:0;display:grid;grid-template-columns:1fr}
     @media (min-width:960px){
-      .topbar{padding:16px 24px 12px}
-      .app{grid-template-columns:minmax(0,1fr) 380px;align-items:start;padding:8px 24px 32px;gap:20px}
-      .side{position:sticky;top:96px;max-height:calc(100dvh - 112px);display:flex;flex-direction:column;gap:16px}
-      .side .log-panel{flex:1;min-height:0;display:flex;flex-direction:column}
-      .side .log{flex:1;max-height:none}
+      .app{grid-template-columns:minmax(0,1fr) 400px;background:var(--page)}
     }
-    @media (min-width:1280px){ .app{grid-template-columns:minmax(0,1fr) 420px} }
+    @media (min-width:1300px){ .app{grid-template-columns:minmax(0,1fr) 440px} }
 
-    /* ---------- camera stage ---------- */
-    .stage{position:relative;background:var(--stage);border-radius:var(--r-lg);overflow:hidden;
-      width:100%;aspect-ratio:4/3;max-height:62dvh;box-shadow:var(--shadow);isolation:isolate}
-    @media (min-width:960px){ .stage{aspect-ratio:16/9;max-height:calc(100dvh - 240px)} }
-    .stage video,.stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+    /* ================= camera stage ================= */
+    .stage{position:relative;overflow:hidden;background:var(--cam);isolation:isolate;touch-action:manipulation}
+    .stage video,.stage .still{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    .stage.fit video,.stage.fit .still{object-fit:contain}
     .stage canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-    .ticks{position:absolute;inset:14px;pointer-events:none;opacity:.55}
-    .ticks span{position:absolute;width:22px;height:22px;border:2px solid #fff}
-    .ticks span:nth-child(1){top:0;left:0;border-right:0;border-bottom:0;border-radius:6px 0 0 0}
-    .ticks span:nth-child(2){top:0;right:0;border-left:0;border-bottom:0;border-radius:0 6px 0 0}
-    .ticks span:nth-child(3){bottom:0;left:0;border-right:0;border-top:0;border-radius:0 0 0 6px}
-    .ticks span:nth-child(4){bottom:0;right:0;border-left:0;border-top:0;border-radius:0 0 6px 0}
+    @media (min-width:960px){ .stage{margin:12px 0 12px 12px;border-radius:20px} .stage video,.stage .still{object-fit:contain} }
 
-    .empty-stage{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
-      justify-content:center;text-align:center;gap:14px;padding:24px;color:#DDE3DE}
-    .empty-stage h2{margin:0;font-size:clamp(20px,3vw,28px);font-weight:800;line-height:1.15;max-width:22ch}
-    .empty-stage p{margin:0;font-size:15px;color:#A9B4AE;max-width:40ch}
-    .empty-stage .row{justify-content:center}
+    /* top bar */
+    .top{position:absolute;left:0;right:0;top:0;z-index:5;display:flex;align-items:center;gap:8px;
+      padding:calc(var(--safe-t) + 10px) 12px 24px;
+      background:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,0));color:#fff}
+    .brand{display:flex;align-items:center;gap:8px;background:var(--sign);border-radius:10px;padding:4px}
+    .brand b{display:flex;align-items:center;gap:7px;border:1.5px solid rgba(255,255,255,.85);border-radius:7px;
+      padding:5px 10px 3px 7px;font-size:16px;font-weight:800;letter-spacing:.01em}
+    .grow{flex:1}
+    .pill{display:flex;align-items:center;gap:7px;height:36px;padding:0 12px;border-radius:99px;
+      background:var(--glass);border:1px solid var(--glass-line);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+      font-size:13px;font-weight:700;white-space:nowrap;color:#fff}
+    .pill i{width:8px;height:8px;border-radius:50%;background:#9AA6B0;flex-shrink:0}
+    .pill[data-s="live"] i{background:#FF4D5E;box-shadow:0 0 0 4px rgba(255,77,94,.25)}
+    .pill[data-s="busy"] i{background:#FFC93C}
+    .pill[data-s="ok"] i{background:#3DDC97}
+    .round{width:44px;height:44px;border-radius:50%;border:1px solid var(--glass-line);background:var(--glass);
+      backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#fff;display:grid;place-items:center;position:relative;flex-shrink:0}
+    .round .badge{position:absolute;top:-2px;right:-2px;min-width:18px;height:18px;border-radius:9px;background:var(--litter);
+      font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 5px}
+    @media (min-width:960px){ .top .hist-btn{display:none} }
 
-    /* lane-marking sweep while analysing: the one motion moment */
-    .sweep{position:absolute;left:0;right:0;height:3px;top:0;opacity:0;pointer-events:none;
-      background:repeating-linear-gradient(90deg,#FFD24A 0 28px,transparent 28px 44px)}
-    .stage.busy .sweep{opacity:1;animation:sweep 1.4s ease-in-out infinite alternate}
-    @keyframes sweep{from{top:0}to{top:calc(100% - 3px)}}
-    @media (prefers-reduced-motion:reduce){ .stage.busy .sweep{animation:none;top:auto;bottom:0} }
+    /* live counts from on-device model */
+    .counts{position:absolute;z-index:4;left:12px;top:calc(var(--safe-t) + 66px);display:flex;gap:6px}
+    .counts .pill{height:30px;font-size:13px;padding:0 10px;gap:6px}
+    .counts svg{width:16px;height:16px}
 
-    .alert{position:absolute;left:12px;top:12px;max-width:calc(100% - 24px);display:flex;align-items:center;
-      gap:10px;padding:10px 14px 10px 10px;border-radius:10px;color:#fff;font-weight:700;font-size:15px;
-      transform:translateY(-8px);opacity:0;transition:opacity .2s, transform .2s;pointer-events:none}
-    .alert.show{opacity:1;transform:none}
-    .alert .glyph{width:26px;height:26px;display:grid;place-items:center;flex-shrink:0}
-    .alert[data-k="litter"]{background:var(--litter)}
-    .alert[data-k="garbage"]{background:var(--garbage)}
-    .alert[data-k="traffic"]{background:var(--traffic)}
-    .alert[data-k="clear"]{background:var(--clear)}
+    /* alert banner */
+    .alert{position:absolute;z-index:6;left:50%;top:calc(var(--safe-t) + 108px);transform:translate(-50%,-10px);opacity:0;
+      display:flex;align-items:center;gap:9px;padding:9px 16px 7px 11px;border-radius:12px;color:#fff;font-weight:800;font-size:15px;
+      white-space:nowrap;transition:opacity .2s,transform .2s;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+    .alert.show{opacity:1;transform:translate(-50%,0)}
+    .alert[data-k="litter"]{background:var(--litter)} .alert[data-k="garbage"]{background:var(--garbage)}
+    .alert[data-k="traffic"]{background:var(--traffic)} .alert[data-k="clear"]{background:var(--sign)}
 
-    .stage-meta{position:absolute;right:12px;bottom:12px;font-size:12px;font-weight:600;color:#fff;
-      background:rgba(0,0,0,.5);padding:5px 9px;border-radius:7px;display:none}
-    .stage-meta.show{display:block}
+    /* scanning sweep: lane-marking line */
+    .sweep{position:absolute;z-index:3;left:0;right:0;top:0;height:4px;opacity:0;pointer-events:none;
+      background:repeating-linear-gradient(90deg,#FFC93C 0 30px,transparent 30px 48px);box-shadow:0 0 18px #FFC93C}
+    .stage.busy .sweep{opacity:1;animation:sweep 1.1s ease-in-out infinite alternate}
+    @keyframes sweep{from{top:8%}to{top:88%}}
+    @media (prefers-reduced-motion:reduce){ .stage.busy .sweep{animation:none;top:50%} }
+    .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:3}
+    .flash.go{animation:flash .28s ease-out}
+    @keyframes flash{from{opacity:.55}to{opacity:0}}
 
-    /* ---------- controls ---------- */
-    .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;
-      padding:0 18px;border-radius:var(--r-md);border:1.5px solid var(--rule);background:var(--paper);
-      color:var(--ink);font-weight:700;font-size:15px;cursor:pointer;white-space:nowrap;
-      transition:background .15s,border-color .15s}
-    .btn:hover{border-color:var(--ink-2)}
-    .btn:disabled{opacity:.4;cursor:not-allowed}
-    .btn svg{flex-shrink:0}
-    .btn.primary{background:var(--sign);border-color:var(--sign);color:#fff}
-    .btn.primary:hover{filter:brightness(1.08)}
-    .btn.stop{background:var(--litter);border-color:var(--litter);color:#fff}
-    .btn.ghost{background:transparent;border-color:rgba(255,255,255,.35);color:#fff}
-    .btn.ghost:hover{border-color:#fff}
-    .row{display:flex;gap:10px;flex-wrap:wrap}
+    /* bottom controls */
+    .controls{position:absolute;z-index:5;left:0;right:0;bottom:0;padding:28px 16px calc(var(--safe-b) + 16px);
+      background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.6) 45%);color:#fff;display:grid;gap:14px;justify-items:center}
+    .modes{display:flex;gap:4px;background:var(--glass);border:1px solid var(--glass-line);border-radius:99px;padding:3px;
+      backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+    .modes button{border:0;background:transparent;color:rgba(255,255,255,.75);font-weight:700;font-size:14px;
+      height:34px;padding:2px 16px 0;border-radius:99px}
+    .modes button[aria-pressed="true"]{background:#fff;color:#111}
+    .row{width:100%;max-width:420px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center}
+    .row .l{justify-self:start} .row .r{justify-self:end}
+    .shutter{width:78px;height:78px;border-radius:50%;border:4px solid #fff;background:transparent;padding:4px;display:grid;place-items:center}
+    .shutter span{width:100%;height:100%;border-radius:50%;background:#fff;transition:transform .12s,border-radius .2s,background .2s}
+    .shutter:active span{transform:scale(.88)}
+    .shutter:disabled{opacity:.5}
+    .shutter.auto span{background:var(--litter)}
+    .shutter.auto.on span{border-radius:10px;transform:scale(.55)}
+    .shutter.busy span{animation:pulse 1s ease-in-out infinite}
+    @keyframes pulse{50%{transform:scale(.8);opacity:.7}}
+    .ctl{width:52px;height:52px}
+    .thumb{width:52px;height:52px;border-radius:12px;border:2px solid rgba(255,255,255,.85);overflow:hidden;background:var(--glass);
+      display:grid;place-items:center;color:#fff;padding:0}
+    .thumb img{width:100%;height:100%;object-fit:cover}
+    .hint{font-size:13px;color:rgba(255,255,255,.8);font-weight:600;min-height:1.2em;text-align:center}
 
-    .mode{display:inline-flex;background:var(--paper);border:1.5px solid var(--rule);border-radius:var(--r-md);padding:4px;gap:2px}
-    .mode button{border:0;background:transparent;border-radius:9px;padding:0 14px;min-height:38px;
-      font-weight:600;font-size:14px;color:var(--ink-2);cursor:pointer;display:flex;align-items:center;gap:7px}
-    .mode button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
-    .mode .sw{width:9px;height:9px;border-radius:2px}
-    .controls .grow{flex:1}
-    .kbd-hint{font-size:13px;color:var(--ink-2);display:none}
-    .kbd-hint kbd{font:inherit;font-weight:700;border:1.5px solid var(--rule);border-bottom-width:3px;
-      border-radius:5px;padding:0 6px;background:var(--paper)}
-    @media (min-width:960px) and (hover:hover){ .kbd-hint{display:block} }
+    /* peek card (phones): last result above the shutter */
+    .peek{position:absolute;z-index:6;left:12px;right:12px;bottom:calc(var(--safe-b) + 196px);margin:0 auto;max-width:440px;
+      background:var(--paper);color:var(--ink);border-radius:16px;display:grid;grid-template-columns:6px 1fr auto;
+      overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,.4);transform:translateY(12px);opacity:0;pointer-events:none;
+      transition:opacity .2s,transform .2s;border:0;padding:0;text-align:left}
+    .peek.show{opacity:1;transform:none;pointer-events:auto}
+    .peek .bar{background:var(--k,var(--sign))}
+    .peek .txt{padding:11px 12px 9px;min-width:0}
+    .peek .h{font-weight:800;font-size:15px;display:flex;gap:8px;align-items:center}
+    .peek .s{font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+    .peek .sc{display:grid;place-items:center;padding:0 14px;border-left:1px solid var(--rule);font-weight:900;font-size:22px;line-height:1}
+    .peek .sc small{font-size:10px;font-weight:700;color:var(--ink-2)}
+    @media (min-width:960px){ .peek{display:none} }
 
-    /* mobile: thumb bar pinned to bottom */
-    .dock{display:flex;gap:10px}
+    /* camera gate: shown until camera runs */
+    .gate{position:absolute;inset:0;z-index:7;display:flex;flex-direction:column;justify-content:flex-end;gap:16px;
+      padding:calc(var(--safe-t) + 90px) 24px calc(var(--safe-b) + 28px);color:#fff;
+      background:radial-gradient(120% 80% at 50% 10%,#1D2A31 0%,var(--cam) 70%)}
+    .gate .art{flex:1;display:grid;place-items:center;min-height:120px}
+    .gate h1{margin:0;font-size:clamp(30px,8vw,46px);line-height:1.02;font-weight:900;letter-spacing:-.01em;max-width:12ch}
+    .gate p{margin:0;color:#B9C4CC;font-size:16px;line-height:1.45;max-width:36ch}
+    .gate .btns{display:grid;gap:10px;max-width:420px}
+    .big{height:56px;border-radius:14px;border:0;font-weight:800;font-size:17px;display:flex;align-items:center;justify-content:center;gap:10px}
+    .big.go{background:var(--sign-hi);color:#fff}
+    .big.alt{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.3)}
+    .gate .note{font-size:13px;color:#8E9AA3}
+    .gate .err{background:rgba(215,38,61,.16);border:1px solid rgba(215,38,61,.5);color:#FFD5DA;padding:12px 14px;border-radius:12px;font-size:14px}
+    @media (min-width:960px){ .gate{justify-content:center;align-items:flex-start;padding:48px} .gate .art{display:none} }
+
+    .toast{position:absolute;z-index:8;left:50%;bottom:calc(var(--safe-b) + 200px);transform:translateX(-50%);
+      background:#2A1216;color:#FFD5DA;border:1px solid rgba(215,38,61,.6);padding:10px 14px;border-radius:12px;font-size:14px;
+      font-weight:600;max-width:calc(100% - 32px);width:max-content;display:none}
+    .toast.show{display:block}
+
+    /* ================= results panel ================= */
+    .panel{background:var(--page);color:var(--ink);display:flex;flex-direction:column;min-height:0}
     @media (max-width:959px){
-      .dock{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:10px 16px calc(env(safe-area-inset-bottom) + 10px);
-        background:color-mix(in srgb, var(--concrete) 88%, transparent);backdrop-filter:blur(14px);
-        -webkit-backdrop-filter:blur(14px);border-top:1px solid var(--rule)}
-      .dock .btn{flex:1;padding:0 10px}
-      .mode{width:100%}
-      .mode button{flex:1;justify-content:center}
+      .panel{position:fixed;left:0;right:0;bottom:0;z-index:20;height:min(86dvh,760px);border-radius:22px 22px 0 0;
+        transform:translateY(102%);transition:transform .32s cubic-bezier(.2,.8,.2,1);box-shadow:0 -20px 50px rgba(0,0,0,.45);
+        padding-bottom:var(--safe-b)}
+      .panel.open{transform:none}
+      .scrim{position:fixed;inset:0;z-index:19;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .25s}
+      .scrim.show{opacity:1;pointer-events:auto}
     }
+    @media (min-width:960px){ .scrim{display:none} .grab,.close-sheet{display:none!important} }
+    .grab{padding:10px 0 2px;display:grid;place-items:center;touch-action:none;cursor:grab}
+    .grab span{width:44px;height:5px;border-radius:3px;background:var(--rule)}
+    .phead{display:flex;align-items:center;gap:8px;padding:8px 16px 12px}
+    @media (min-width:960px){ .phead{padding:22px 20px 14px} }
+    .tabs{display:flex;background:var(--paper);border:1px solid var(--rule);border-radius:12px;padding:3px;gap:3px;flex:1}
+    .tabs button{flex:1;border:0;background:transparent;height:38px;border-radius:9px;font-weight:700;font-size:15px;color:var(--ink-2);padding-top:2px}
+    .tabs button[aria-selected="true"]{background:var(--ink);color:var(--paper)}
+    .tabs .n{font-weight:600;opacity:.7;margin-left:4px}
+    .close-sheet{width:42px;height:42px;border-radius:50%;border:1px solid var(--rule);background:var(--paper);display:grid;place-items:center}
+    .pbody{flex:1;overflow:auto;padding:0 16px 24px;-webkit-overflow-scrolling:touch}
+    @media (min-width:960px){ .pbody{padding:0 20px 24px} }
 
-    .err{display:none;gap:10px;align-items:flex-start;background:color-mix(in srgb,var(--litter) 10%,var(--paper));
-      border:1.5px solid color-mix(in srgb,var(--litter) 45%,transparent);color:var(--ink);
-      padding:12px 14px;border-radius:var(--r-md);font-size:14px}
-    .err.show{display:flex}
-    .err b{color:var(--litter)}
-
-    /* ---------- panels ---------- */
-    .panel{background:var(--paper);border-radius:var(--r-lg);padding:18px;box-shadow:var(--shadow)}
-    .panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:14px}
-    .panel h2{margin:0;font-size:18px;font-weight:800}
-    .panel .when{font-size:13px;color:var(--ink-2)}
-
-    /* reading: cleanliness shown as a regulatory sign plate */
-    .reading{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center}
-    .plate{width:104px;background:#fff;color:#111;border:3px solid #111;border-radius:10px;
-      padding:6px 4px 4px;text-align:center;box-shadow:inset 0 0 0 3px #fff, inset 0 0 0 5px #111}
-    .plate small{display:block;font-size:12px;font-weight:800;line-height:1.1;letter-spacing:.02em;padding-top:4px}
-    .plate b{display:block;font-size:46px;font-weight:900;line-height:1;margin:2px 0 4px}
-    .plate[data-lvl="bad"] b{color:var(--litter)}
-    .plate[data-lvl="mid"] b{color:#B5530C}
-    .figs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-    .fig{border-left:3px solid var(--rule);padding:2px 0 2px 10px}
-    .fig b{display:block;font-size:24px;font-weight:800;line-height:1.1;text-transform:capitalize}
-    .fig span{font-size:13px;color:var(--ink-2)}
-    .summary{margin:16px 0 0;font-size:16px;line-height:1.5;max-width:60ch}
-    .todo{margin-top:12px;display:none;gap:10px;padding:12px;border-radius:var(--r-md);
-      background:color-mix(in srgb,var(--garbage) 12%,var(--paper));font-size:14px}
-    .todo.show{display:flex}
+    .card{background:var(--paper);border-radius:16px;padding:16px;border:1px solid var(--rule)}
+    .card + .card{margin-top:12px}
+    .verdict{display:flex;align-items:center;gap:12px;padding:12px 14px 10px;border-radius:12px;color:#fff;font-weight:800;font-size:18px}
+    .verdict small{display:block;font-weight:600;font-size:13px;opacity:.9}
+    .verdict[data-k="litter"]{background:var(--litter)} .verdict[data-k="garbage"]{background:var(--garbage)}
+    .verdict[data-k="traffic"]{background:var(--traffic)} .verdict[data-k="clear"]{background:var(--sign)}
+    .reading{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;margin-top:14px}
+    .plate{width:92px;background:#fff;color:#111;border:3px solid #111;border-radius:10px;padding:6px 4px 4px;text-align:center;
+      box-shadow:inset 0 0 0 3px #fff, inset 0 0 0 5px #111}
+    .plate small{display:block;font-size:11px;font-weight:800;line-height:1.1;padding-top:3px}
+    .plate b{display:block;font-size:40px;font-weight:900;line-height:1;margin:3px 0 2px}
+    .plate[data-lvl="bad"] b{color:var(--litter)} .plate[data-lvl="mid"] b{color:#B5530C} .plate[data-lvl="good"] b{color:var(--sign)}
+    .figs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+    .fig{border-left:3px solid var(--rule);padding:2px 0 0 9px;min-width:0}
+    .fig b{display:block;font-size:22px;font-weight:800;line-height:1.1;text-transform:capitalize;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .fig span{font-size:12px;color:var(--ink-2)}
+    .summary{font-size:16px;line-height:1.5;margin:14px 0 0}
+    .todo{margin-top:12px;display:flex;gap:10px;padding:12px;border-radius:12px;background:color-mix(in srgb,var(--garbage) 13%,var(--paper));font-size:14px;line-height:1.4}
     .todo b{display:block}
     .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
-    .chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;
-      padding:5px 10px 4px;border-radius:7px;color:#fff}
-    .chip[data-t="garbage"]{background:var(--garbage)}
-    .chip[data-t="littering"]{background:var(--litter)}
-    .chip[data-t="traffic"]{background:var(--traffic)}
-    .chip em{font-style:normal;opacity:.8;font-weight:500}
+    .chip{font-size:13px;font-weight:700;padding:5px 10px 3px;border-radius:7px;color:#fff}
+    .chip[data-t="garbage"]{background:var(--garbage)} .chip[data-t="littering"]{background:var(--litter)} .chip[data-t="traffic"]{background:var(--traffic)}
+    .chip em{font-style:normal;font-weight:500;opacity:.85}
+    .meta{margin-top:12px;font-size:12px;color:var(--ink-2)}
+    .snap{width:100%;height:auto;border-radius:12px;display:block;margin-top:12px;background:var(--cam)}
+    .empty{text-align:center;padding:40px 16px;color:var(--ink-2);font-size:15px;line-height:1.5}
+    .empty svg{margin:0 auto 12px;opacity:.6}
 
-    /* incident log */
-    .log{display:grid;gap:2px;max-height:520px;overflow:auto;margin:0 -8px;padding:0 8px}
-    .entry{display:grid;grid-template-columns:96px 1fr;gap:12px;padding:10px 0;border-top:1px solid var(--rule)}
-    .entry:first-child{border-top:0}
-    .entry img{width:96px;height:68px;object-fit:cover;border-radius:var(--r-sm);background:var(--stage)}
-    .entry .kinds{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:3px}
-    .entry .k{font-size:12px;font-weight:700;padding:2px 7px 1px;border-radius:5px;color:#fff}
-    .entry .k[data-t="littering"]{background:var(--litter)}
-    .entry .k[data-t="garbage"]{background:var(--garbage)}
-    .entry .k[data-t="traffic"]{background:var(--traffic)}
-    .entry .k[data-t="clear"]{background:var(--clear)}
+    .hist-tools{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .hist-tools span{font-size:13px;color:var(--ink-2)}
+    .text-btn{border:0;background:none;color:var(--traffic);font-weight:700;font-size:14px;padding:8px;border-radius:8px}
+    .entry{display:grid;grid-template-columns:88px 1fr;gap:12px;padding:10px;background:var(--paper);border:1px solid var(--rule);border-radius:14px;width:100%;text-align:left;color:inherit}
+    .entry + .entry{margin-top:8px}
+    .entry img{width:88px;height:66px;object-fit:cover;border-radius:9px;background:var(--cam)}
+    .entry .ks{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:3px}
+    .k{font-size:11px;font-weight:800;padding:2px 7px 1px;border-radius:5px;color:#fff}
+    .k[data-t="littering"]{background:var(--litter)} .k[data-t="garbage"]{background:var(--garbage)}
+    .k[data-t="traffic"]{background:var(--traffic)} .k[data-t="clear"]{background:var(--sign)}
     .entry p{margin:0;font-size:14px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
     .entry time{font-size:12px;color:var(--ink-2)}
-    .entry a{color:var(--traffic);font-weight:600;text-decoration:none}
-    .log-empty{text-align:center;padding:28px 12px;color:var(--ink-2);font-size:14px}
-    .log-tools{display:flex;gap:4px}
-    .text-btn{border:0;background:none;color:var(--traffic);font-weight:700;font-size:14px;
-      padding:6px 8px;border-radius:7px;cursor:pointer;min-height:36px}
-    .text-btn:hover{background:color-mix(in srgb,var(--traffic) 10%,transparent)}
-    .count{font-size:13px;color:var(--ink-2);font-weight:500;margin-left:6px}
+    .entry a{color:var(--traffic);font-weight:700;text-decoration:none;font-size:12px}
 
-    /* settings sheet */
-    dialog{border:0;padding:0;background:var(--paper);color:var(--ink);border-radius:var(--r-lg);
-      width:min(440px,calc(100% - 32px));box-shadow:0 30px 80px -20px rgba(0,0,0,.45)}
-    dialog::backdrop{background:rgba(15,20,25,.5);backdrop-filter:blur(3px)}
-    @media (max-width:959px){
-      dialog{margin:auto 0 0;width:100%;max-width:100%;border-radius:var(--r-lg) var(--r-lg) 0 0;
-        padding-bottom:env(safe-area-inset-bottom)}
-    }
+    /* settings */
+    dialog{border:0;padding:0;background:var(--paper);color:var(--ink);border-radius:20px;width:min(440px,calc(100% - 32px));
+      box-shadow:0 30px 80px -20px rgba(0,0,0,.6)}
+    dialog::backdrop{background:rgba(0,0,0,.55)}
+    @media (max-width:959px){ dialog{margin:auto 0 0;width:100%;max-width:100%;border-radius:22px 22px 0 0;padding-bottom:var(--safe-b)} }
     .sheet{padding:20px}
-    .sheet h2{margin:0 0 4px;font-size:20px;font-weight:800}
-    .sheet > p{margin:0 0 14px;color:var(--ink-2);font-size:14px}
-    .opt{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;border-top:1px solid var(--rule)}
-    .opt b{display:block;font-size:15px}
-    .opt span{font-size:13px;color:var(--ink-2)}
-    .opt select{min-height:42px;border-radius:10px;border:1.5px solid var(--rule);background:var(--paper);padding:0 10px;font-weight:600}
-    .switch{appearance:none;width:48px;height:28px;border-radius:99px;background:var(--rule);position:relative;
-      cursor:pointer;flex-shrink:0;transition:background .15s;margin:0}
-    .switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
-      background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
-    .switch:checked{background:var(--sign)}
-    .switch:checked::after{transform:translateX(20px)}
-    .sheet .btn{width:100%;margin-top:8px}
+    .sheet h2{margin:0 0 4px;font-size:21px;font-weight:800}
+    .sheet > p{margin:0 0 10px;color:var(--ink-2);font-size:14px}
+    .opt{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 0;border-top:1px solid var(--rule)}
+    .opt b{display:block;font-size:15px} .opt span{font-size:13px;color:var(--ink-2)}
+    .opt select{height:42px;border-radius:10px;border:1.5px solid var(--rule);background:var(--paper);padding:0 10px;font-weight:600;max-width:46%}
+    .switch{appearance:none;-webkit-appearance:none;width:50px;height:30px;border-radius:99px;background:var(--rule);position:relative;flex-shrink:0;margin:0;transition:background .15s}
+    .switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
+    .switch:checked{background:var(--sign-hi)} .switch:checked::after{transform:translateX(20px)}
+    .sheet .big{width:100%;margin-top:10px}
     input[type=file]{display:none}
-    [hidden]{display:none!important}
-    @media (max-width:520px){
-      .sign .sub{display:none}
-      .sign h1{font-size:20px}
-      .sign-inner{min-height:46px;padding:6px 8px 6px 12px;gap:10px}
-      .status{padding:6px 10px;font-size:13px}
-      .fig b{font-size:20px}
-      .reading{gap:12px}
-      .plate{width:92px}
-      .plate b{font-size:40px}
-    }
-    @media (max-width:959px){
-      .dock{gap:8px}
-      .dock .btn{min-width:0}
-      .dock .icon-only,.dock #camBtn{flex:0 0 52px;padding:0}
-      .dock .up-label,.dock #camLabel{display:none}
-    }
   </style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="sign"><div class="sign-inner">
-      <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="29" fill="none" stroke="#fff" stroke-width="5"/><circle cx="32" cy="32" r="13" fill="none" stroke="#fff" stroke-width="5"/><circle cx="32" cy="32" r="5" fill="#fff"/></svg>
-      <div>
-        <h1>CityEye</h1>
-        <div class="sub">Litter and traffic watch</div>
-      </div>
-      <div class="spacer"></div>
-      <div class="status" id="status" data-s="idle" role="status" aria-live="polite"><i></i><span id="statusText">Idle</span></div>
-      <button class="icon-btn" id="settingsBtn" aria-label="Settings">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>
+<div class="app">
+  <!-- ================= CAMERA ================= -->
+  <section class="stage" id="stage" aria-label="Camera">
+    <video id="video" playsinline muted autoplay></video>
+    <img class="still" id="still" alt="" hidden />
+    <canvas id="liveCanvas"></canvas>
+    <canvas id="aiCanvas"></canvas>
+    <div class="sweep" aria-hidden="true"></div>
+    <div class="flash" id="flash"></div>
+
+    <div class="top">
+      <div class="brand"><b>
+        <svg width="18" height="18" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27" fill="none" stroke="#fff" stroke-width="7"/><circle cx="32" cy="32" r="10" fill="#fff"/></svg>
+        CityEye</b></div>
+      <div class="grow"></div>
+      <div class="pill" id="status" data-s="idle" role="status" aria-live="polite"><i></i><span id="statusText">Camera off</span></div>
+      <button class="round hist-btn" id="histBtn" aria-label="History">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>
+        <span class="badge" id="histBadge" hidden></span>
       </button>
-    </div></div>
-  </header>
+      <button class="round" id="settingsBtn" aria-label="Settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>
+      </button>
+    </div>
 
-  <main class="app">
-    <!-- left: camera + controls -->
-    <section class="main" style="display:grid;gap:12px;min-width:0">
-      <div class="stage" id="stage">
-        <video id="video" playsinline muted></video>
-        <canvas id="overlay"></canvas>
-        <div class="ticks" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-        <div class="sweep" aria-hidden="true"></div>
-        <div class="empty-stage" id="emptyStage">
-          <h2>Point a camera at the street</h2>
-          <p>CityEye checks each frame for garbage, people littering and traffic problems.</p>
-          <div class="row">
-            <button class="btn primary" id="emptyCam">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-              Start camera</button>
-            <label class="btn ghost" for="fileIn">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
-              Upload video or photo</label>
-          </div>
-        </div>
-        <div class="alert" id="alert" role="alert"><span class="glyph" id="alertGlyph"></span><span id="alertText"></span></div>
-        <div class="stage-meta" id="stageMeta"></div>
+    <div class="counts" id="counts" hidden>
+      <span class="pill" title="Vehicles seen live"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 17h14M5 17v-5l2-5h10l2 5v5M5 12h14"/><circle cx="8" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/></svg><span id="cVeh">0</span></span>
+      <span class="pill" title="People seen live"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="5" r="2.5"/><path d="M12 8v7M8 22l4-7 4 7M7 11h10"/></svg><span id="cPpl">0</span></span>
+      <span class="pill" title="Litter-like objects seen live" id="cLitWrap" hidden style="color:#FFC08A"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span id="cLit">0</span></span>
+    </div>
+
+    <div class="alert" id="alert" role="alert"><span id="alertGlyph"></span><span id="alertText"></span></div>
+    <div class="toast" id="toast" role="alert"></div>
+
+    <button class="peek" id="peek" aria-label="Open full result">
+      <span class="bar"></span>
+      <span class="txt"><span class="h" id="peekH"></span><span class="s" id="peekS" style="display:block"></span></span>
+      <span class="sc"><span><span id="peekScore">–</span><br><small>clean</small></span></span>
+    </button>
+
+    <div class="controls">
+      <div class="hint" id="hint">Tap the shutter to scan the street</div>
+      <div class="modes" role="group" aria-label="Scan mode">
+        <button aria-pressed="true" data-m="once">Scan</button>
+        <button aria-pressed="false" data-m="auto">Auto watch</button>
       </div>
-
-      <div class="err" id="err" role="alert">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--litter)" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 7v6M12 17h.01"/></svg>
-        <div><b id="errTitle">Something went wrong</b><div id="errMsg"></div></div>
+      <div class="row">
+        <label class="thumb l" for="fileIn" id="thumb" aria-label="Upload a photo or video">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+        </label>
+        <button class="shutter" id="shutter" aria-label="Scan now" disabled><span></span></button>
+        <button class="round ctl r" id="flipBtn" aria-label="Switch camera">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg>
+        </button>
       </div>
+    </div>
 
-      <div class="controls">
-        <div class="mode" role="group" aria-label="What to look for" id="mode">
-          <button aria-pressed="true" data-mode="all">Everything</button>
-          <button aria-pressed="false" data-mode="garbage"><i class="sw" style="background:var(--garbage)"></i>Garbage</button>
-          <button aria-pressed="false" data-mode="traffic"><i class="sw" style="background:var(--traffic)"></i>Traffic</button>
-        </div>
-        <div class="grow"></div>
-        <span class="kbd-hint"><kbd>Space</kbd> check frame · <kbd>M</kbd> monitor</span>
+    <div class="gate" id="gate">
+      <div class="art" aria-hidden="true">
+        <svg width="150" height="150" viewBox="0 0 120 120" fill="none">
+          <rect x="6" y="6" width="108" height="108" rx="22" fill="#0E6B45"/>
+          <rect x="12" y="12" width="96" height="96" rx="17" stroke="#fff" stroke-width="3"/>
+          <circle cx="60" cy="60" r="27" stroke="#fff" stroke-width="7"/>
+          <circle cx="60" cy="60" r="10" fill="#fff"/>
+        </svg>
       </div>
-
-      <div class="dock" id="dock">
-        <button class="btn" id="camBtn" aria-label="Start or stop camera">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-          <span id="camLabel">Camera</span></button>
-        <button class="btn icon-only" id="flipBtn" hidden aria-label="Switch camera">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg></button>
-        <label class="btn icon-only" for="fileIn" aria-label="Upload video or photo">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
-          <span class="up-label">Upload</span></label>
-        <button class="btn" id="snapBtn" disabled>Check frame</button>
-        <button class="btn primary" id="autoBtn" disabled>Monitor</button>
+      <h1>Point your camera at the street</h1>
+      <p>CityEye spots garbage, people littering and traffic problems, and logs each one with a photo.</p>
+      <div class="err" id="gateErr" hidden></div>
+      <div class="btns">
+        <button class="big go" id="startBtn">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          Start camera</button>
+        <label class="big alt" for="fileIn">Upload a photo or video instead</label>
       </div>
-      <input type="file" id="fileIn" accept="video/*,image/*" />
-    </section>
+      <div class="note">Your browser will ask for camera permission.</div>
+    </div>
+    <input type="file" id="fileIn" accept="image/*,video/*" />
+  </section>
 
-    <!-- right: results -->
-    <aside class="side">
-      <section class="panel" aria-labelledby="readingH">
-        <div class="panel-head"><h2 id="readingH">Latest check</h2><span class="when" id="when">Not checked yet</span></div>
-        <div class="reading">
-          <div class="plate" id="plate"><small>Clean<br>score</small><b id="sClean">–</b></div>
-          <div class="figs">
-            <div class="fig"><b id="sDensity">–</b><span>Traffic</span></div>
-            <div class="fig"><b id="sVeh">–</b><span>Vehicles</span></div>
-            <div class="fig"><b id="sPpl">–</b><span>People</span></div>
-          </div>
-        </div>
-        <p class="summary" id="summary">Start the camera, then check a frame to see what CityEye finds.</p>
-        <div class="todo" id="todo">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--garbage)" stroke-width="2.4" stroke-linecap="round" style="flex-shrink:0;margin-top:1px"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>
-          <div><b>Suggested action</b><span id="todoText"></span></div>
-        </div>
-        <div class="chips" id="chips"></div>
-      </section>
+  <!-- ================= RESULTS ================= -->
+  <div class="scrim" id="scrim"></div>
+  <aside class="panel" id="panel" aria-label="Results">
+    <div class="grab" id="grab"><span></span></div>
+    <div class="phead">
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="result">Result</button>
+        <button role="tab" aria-selected="false" data-tab="history">History<span class="n" id="histN"></span></button>
+      </div>
+      <button class="close-sheet" id="closeSheet" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="pbody" id="pbody">
+      <div id="tab-result"></div>
+      <div id="tab-history" hidden></div>
+    </div>
+  </aside>
+</div>
 
-      <section class="panel log-panel" aria-labelledby="logH">
-        <div class="panel-head">
-          <h2 id="logH">Incidents<span class="count" id="logCount"></span></h2>
-          <div class="log-tools">
-            <button class="text-btn" id="exportBtn">Export CSV</button>
-            <button class="text-btn" id="clearBtn">Clear</button>
-          </div>
-        </div>
-        <div class="log" id="log"></div>
-      </section>
-    </aside>
-  </main>
-
-  <dialog id="settings">
-    <form method="dialog" class="sheet">
-      <h2>Settings</h2>
-      <p>Saved on this device.</p>
-      <label class="opt"><div><b>Monitor interval</b><span>How often a frame is checked</span></div>
-        <select id="interval">
-          <option value="3000">Every 3 s</option>
-          <option value="5000">Every 5 s</option>
-          <option value="10000" selected>Every 10 s</option>
-          <option value="30000">Every 30 s</option>
-        </select></label>
-      <label class="opt"><div><b>Alerts</b><span>Beep and vibrate when something is found</span></div>
-        <input type="checkbox" class="switch" id="alertsOn" checked></label>
-      <label class="opt"><div><b>Location</b><span>Attach GPS to each incident</span></div>
-        <input type="checkbox" class="switch" id="gpsOn"></label>
-      <label class="opt"><div><b>Incidents only</b><span>Don't log frames where the street is clear</span></div>
-        <input type="checkbox" class="switch" id="onlyInc" checked></label>
-      <button class="btn primary" value="close">Done</button>
-    </form>
-  </dialog>
+<dialog id="settings">
+  <form method="dialog" class="sheet">
+    <h2>Settings</h2>
+    <p>Saved on this device.</p>
+    <label class="opt"><div><b>Look for</b><span>What the AI checks first</span></div>
+      <select id="focus">
+        <option value="all">Everything</option>
+        <option value="garbage">Garbage and littering</option>
+        <option value="traffic">Traffic</option>
+      </select></label>
+    <label class="opt"><div><b>Auto watch interval</b><span>Time between scans</span></div>
+      <select id="interval">
+        <option value="3000">3 seconds</option>
+        <option value="5000">5 seconds</option>
+        <option value="10000" selected>10 seconds</option>
+        <option value="30000">30 seconds</option>
+      </select></label>
+    <label class="opt"><div><b>Live object boxes</b><span>Counts vehicles and people on the phone, instantly</span></div>
+      <input type="checkbox" class="switch" id="liveOn" checked></label>
+    <label class="opt"><div><b>Alerts</b><span>Beep and vibrate when something is found</span></div>
+      <input type="checkbox" class="switch" id="alertsOn" checked></label>
+    <label class="opt"><div><b>Location</b><span>Attach GPS to each incident</span></div>
+      <input type="checkbox" class="switch" id="gpsOn"></label>
+    <label class="opt"><div><b>Incidents only</b><span>Don't save scans where the street is clear</span></div>
+      <input type="checkbox" class="switch" id="onlyInc" checked></label>
+    <button class="big go" value="close">Done</button>
+  </form>
+</dialog>
 
 <script>
 (() => {
-  const $ = (id) => document.getElementById(id);
-  const video = $("video"), overlay = $("overlay"), ctx = overlay.getContext("2d"), stage = $("stage");
-  const COLORS = { garbage: "#E8701A", littering: "#C8202F", traffic: "#1D5BA8" };
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const video = $("video"), stage = $("stage"), still = $("still");
+  const liveC = $("liveCanvas"), liveX = liveC.getContext("2d");
+  const aiC = $("aiCanvas"), aiX = aiC.getContext("2d");
+  const COL = { garbage:"#F07A1F", littering:"#D7263D", traffic:"#2F6FD0" };
+  const isDesktop = () => matchMedia("(min-width:960px)").matches;
   const MAX_LOG = 60;
-  const state = { stream:null, facing:"environment", mode:"all", timer:null, busy:false,
-    source:null, imgEl:null, coords:null, lastDets:[], log:loadJSON("cityeye_log", []) };
+  const isFit = () => stage.classList.contains("fit") || isDesktop();
 
-  // ---------- persistence ----------
-  function loadJSON(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }
-  function saveJSON(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } }
-  const prefs = loadJSON("cityeye_prefs", {});
-  ["interval","alertsOn","gpsOn","onlyInc"].forEach(id => {
-    const el = $(id); if (prefs[id] === undefined) return;
-    if (el.type === "checkbox") el.checked = prefs[id]; else el.value = prefs[id];
+  const S = {
+    stream:null, facing:"environment", mode:"once", timer:null, busy:false,
+    source:null,              // "camera" | "video" | "image"
+    frozen:false, frameW:0, frameH:0, aiDets:[], aiFadeAt:0,
+    coords:null, geo:null, detector:null, detLoading:false, detTimer:0,
+    last:null, log:load("cityeye_log", [])
+  };
+
+  // ---------------- storage ----------------
+  function load(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }
+  function store(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } }
+  const prefs = load("cityeye_prefs", {});
+  ["focus","interval","liveOn","alertsOn","gpsOn","onlyInc"].forEach(id => {
+    if (prefs[id] === undefined) return; const el = $(id);
+    el.type === "checkbox" ? (el.checked = prefs[id]) : (el.value = prefs[id]);
   });
-  function savePrefs(){
-    saveJSON("cityeye_prefs", { interval:$("interval").value, alertsOn:$("alertsOn").checked,
-      gpsOn:$("gpsOn").checked, onlyInc:$("onlyInc").checked });
-  }
+  function savePrefs(){ store("cityeye_prefs", { focus:$("focus").value, interval:$("interval").value,
+    liveOn:$("liveOn").checked, alertsOn:$("alertsOn").checked, gpsOn:$("gpsOn").checked, onlyInc:$("onlyInc").checked }); }
 
-  // ---------- small helpers ----------
+  // ---------------- ui helpers ----------------
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  function setStatus(text, s="idle"){ $("statusText").textContent = text; $("status").dataset.s = s; }
-  function showErr(title, msg){
-    if (!title){ $("err").classList.remove("show"); return; }
-    $("errTitle").textContent = title; $("errMsg").textContent = msg || ""; $("err").classList.add("show");
-  }
-  const mediaEl = () => state.source === "image" ? state.imgEl : video;
+  function status(t, s="idle"){ $("statusText").textContent = t; $("status").dataset.s = s; }
+  let toastT;
+  function toast(msg){ const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 5000); }
+  function hint(t){ $("hint").textContent = t; }
+
+  // ---------------- media geometry ----------------
   function mediaSize(){
-    const el = mediaEl(); if (!el) return [0,0];
-    return state.source === "image" ? [el.naturalWidth, el.naturalHeight] : [el.videoWidth, el.videoHeight];
+    if (S.frozen) return [S.frameW, S.frameH];
+    if (S.source === "image") return [S.imgW, S.imgH];
+    return [video.videoWidth, video.videoHeight];
   }
-  const hasMedia = () => { const [w,h] = mediaSize(); return w > 0 && h > 0; };
-
-  function setMediaUI(on){
-    $("emptyStage").hidden = on;
-    $("snapBtn").disabled = !on;
-    $("autoBtn").disabled = !on || state.source === "image";
-    const cam = state.source === "camera";
-    $("camLabel").textContent = cam ? "Stop" : "Camera";
-    $("camBtn").classList.toggle("stop", cam);
+  // where the media is drawn inside the stage (object-fit cover or contain)
+  function drawRect(){
+    const sw = stage.clientWidth, sh = stage.clientHeight, [mw, mh] = mediaSize();
+    if (!mw || !mh) return { x:0, y:0, w:sw, h:sh };
+    const fit = isFit();
+    const s = fit ? Math.min(sw/mw, sh/mh) : Math.max(sw/mw, sh/mh);
+    const w = mw*s, h = mh*s; return { x:(sw-w)/2, y:(sh-h)/2, w, h };
+  }
+  function sizeCanvas(c, x){
+    const dpr = Math.min(2, devicePixelRatio || 1), w = stage.clientWidth, h = stage.clientHeight;
+    if (c.width !== Math.round(w*dpr) || c.height !== Math.round(h*dpr)){ c.width = Math.round(w*dpr); c.height = Math.round(h*dpr); }
+    x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,w,h);
   }
 
-  // ---------- camera ----------
+  // ---------------- camera ----------------
   async function startCamera(){
-    showErr();
+    $("gateErr").hidden = true;
     if (!navigator.mediaDevices?.getUserMedia){
-      showErr("Camera isn't available", "Open the site over HTTPS in a current version of Chrome, Safari, Edge or Firefox.");
-      return;
+      return gateError("This browser can't open the camera. Open the site in Chrome or Safari over https.");
     }
-    stopMedia();
+    stopMedia(true);
+    $("startBtn").disabled = true; $("startBtn").lastChild.textContent = " Starting camera…";
     try {
-      state.stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: state.facing }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
-      video.srcObject = state.stream;
-      await video.play();
-      state.source = "camera"; setMediaUI(true); setStatus("Camera on");
-      const devs = await navigator.mediaDevices.enumerateDevices().catch(() => []);
-      $("flipBtn").hidden = devs.filter(d => d.kind === "videoinput").length < 2;
-    } catch (e) {
-      const denied = e.name === "NotAllowedError";
-      showErr(denied ? "Camera permission is off" : "Couldn't start the camera",
-        denied ? "Allow camera access for this site in your browser settings, then tap Camera again." : e.message);
+      S.stream = await navigator.mediaDevices.getUserMedia({ audio:false,
+        video:{ facingMode:{ ideal:S.facing }, width:{ ideal:1280 }, height:{ ideal:720 }, frameRate:{ ideal:30, max:30 } } });
+      video.srcObject = S.stream; await video.play();
+      S.source = "camera"; stage.classList.remove("fit");
+      $("gate").hidden = true; $("shutter").disabled = false;
+      status("Live", "ok"); hint(S.mode === "auto" ? "Tap to start watching" : "Tap the shutter to scan the street");
+      store("cityeye_cam", true);
+      warmUp(); startLive();
+    } catch (e){
+      gateError(e.name === "NotAllowedError"
+        ? "Camera permission is blocked. Allow camera for this site in your browser settings, then tap Start camera."
+        : e.name === "NotFoundError" ? "No camera was found on this device. Upload a photo or video instead."
+        : "The camera couldn't start: " + e.message);
+    } finally {
+      $("startBtn").disabled = false; $("startBtn").lastChild.textContent = " Start camera";
     }
   }
-  function stopMedia(){
+  function gateError(m){ $("gate").hidden = false; $("gateErr").textContent = m; $("gateErr").hidden = false; }
+  function stopMedia(keepGate){
     stopAuto();
-    if (state.stream){ state.stream.getTracks().forEach(t => t.stop()); state.stream = null; }
-    video.pause(); video.srcObject = null;
+    if (S.stream){ S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
+    video.srcObject = null;
     if (video.getAttribute("src")){ URL.revokeObjectURL(video.src); video.removeAttribute("src"); video.load(); }
-    if (state.imgEl){ URL.revokeObjectURL(state.imgEl.src); state.imgEl.remove(); state.imgEl = null; }
-    state.source = null; state.lastDets = []; clearOverlay();
-    $("flipBtn").hidden = true; $("stageMeta").classList.remove("show");
-    setMediaUI(false); setStatus("Idle");
+    S.source = null; unfreeze(); $("shutter").disabled = true; status("Camera off");
+    if (!keepGate) $("gate").hidden = false;
   }
+  $("startBtn").onclick = startCamera;
+  $("flipBtn").onclick = () => {
+    if (S.source !== "camera"){ startCamera(); return; }
+    S.facing = S.facing === "environment" ? "user" : "environment"; startCamera();
+  };
 
-  // ---------- upload ----------
+  // ---------------- upload ----------------
   $("fileIn").addEventListener("change", e => {
     const f = e.target.files[0]; e.target.value = ""; if (!f) return;
-    stopMedia(); showErr();
-    const url = URL.createObjectURL(f);
+    stopMedia(true); const url = URL.createObjectURL(f);
+    $("gate").hidden = true; stage.classList.add("fit");
     if (f.type.startsWith("image/")){
-      const img = new Image(); img.alt = "Uploaded street photo"; img.src = url;
+      const img = new Image();
       img.onload = () => {
-        stage.insertBefore(img, overlay); state.imgEl = img; state.source = "image";
-        setMediaUI(true); setStatus("Photo loaded"); meta(f.name); analyze();
+        S.source = "image"; S.imgW = img.naturalWidth; S.imgH = img.naturalHeight; S.img = img;
+        still.src = url; still.hidden = false; $("shutter").disabled = false;
+        status("Photo", "ok"); hint("Scanning your photo…"); scan();
       };
-      img.onerror = () => showErr("Couldn't open that photo", "Try a JPG or PNG file.");
+      img.onerror = () => { toast("That photo couldn't be opened. Try a JPG or PNG."); $("gate").hidden = false; };
+      img.src = url;
     } else {
-      video.src = url; video.loop = true;
-      video.onloadeddata = () => { state.source = "video"; video.play(); setMediaUI(true); setStatus("Video loaded"); meta(f.name); };
-      video.onerror = () => showErr("Couldn't play that video", "Try an MP4 file recorded on a phone.");
+      video.src = url; video.loop = true; video.muted = true;
+      video.onloadeddata = () => { S.source = "video"; video.play(); $("shutter").disabled = false; status("Video", "ok"); hint("Tap the shutter to scan this frame"); startLive(); };
+      video.onerror = () => { toast("That video couldn't be played. Try an MP4."); $("gate").hidden = false; };
     }
   });
-  function meta(t){ $("stageMeta").textContent = t; $("stageMeta").classList.add("show"); }
 
-  // ---------- capture & analyse ----------
-  function captureFrame(maxW = 960){
-    const el = mediaEl(); const [w,h] = mediaSize();
-    const s = Math.min(1, maxW / Math.max(w, h));
-    const c = document.createElement("canvas");
+  // ---------------- warm-up: wake the server function while the user aims ----------------
+  let warmed = false;
+  function warmUp(){ if (warmed) return; warmed = true; fetch("/api/analyze", { method:"GET" }).catch(() => {}); }
+
+  // ---------------- on-device live detection (instant) ----------------
+  const VEH = new Set(["car","bus","truck","motorcycle","bicycle"]);
+  const LIT = new Set(["bottle","cup","handbag","backpack","suitcase","bowl","wine glass"]);
+  function loadScript(src){ return new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.async = true; s.crossOrigin = "anonymous"; s.onload = ok; s.onerror = no; document.head.appendChild(s); }); }
+  async function startLive(){
+    if (!$("liveOn").checked){ $("counts").hidden = true; return; }
+    $("counts").hidden = false;
+    if (!S.detector && !S.detLoading){
+      S.detLoading = true; $("cVeh").textContent = "…"; $("cPpl").textContent = "…";
+      try {
+        await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js");
+        await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js");
+        S.detector = await window.cocoSsd.load({ base:"lite_mobilenet_v2" });
+      } catch { $("counts").hidden = true; S.detLoading = false; return; }
+      S.detLoading = false;
+    }
+    liveLoop();
+  }
+  async function liveLoop(){
+    cancelAnimationFrame(S.detTimer);
+    const tick = async () => {
+      if (!S.detector || !$("liveOn").checked || document.hidden) return;
+      const playing = (S.source === "camera" || S.source === "video") && video.readyState >= 2 && !S.frozen;
+      if (playing){
+        try {
+          const preds = await S.detector.detect(video, 20, 0.45);
+          drawLive(preds);
+        } catch {}
+      } else if (!S.frozen) drawLive([]); else liveX.clearRect(0,0,liveC.width,liveC.height);
+      drawAI();
+      S.detTimer = setTimeout(() => requestAnimationFrame(tick), 90);
+    };
+    tick();
+  }
+  function drawLive(preds){
+    sizeCanvas(liveC, liveX);
+    const r = drawRect(), [mw, mh] = mediaSize(); if (!mw) return;
+    let v = 0, p = 0, l = 0;
+    liveX.font = "700 12px Overpass, system-ui, sans-serif"; liveX.lineWidth = 2;
+    preds.forEach(d => {
+      const isV = VEH.has(d.class), isP = d.class === "person", isL = LIT.has(d.class);
+      if (!(isV || isP || isL)) return;
+      isV ? v++ : isP ? p++ : l++;
+      const [bx, by, bw, bh] = d.bbox;
+      const x = r.x + bx/mw*r.w, y = r.y + by/mh*r.h, w = bw/mw*r.w, h = bh/mh*r.h;
+      const col = isV ? "rgba(120,170,255,.95)" : isP ? "rgba(255,255,255,.9)" : "rgba(255,170,90,.95)";
+      liveX.strokeStyle = col; liveX.setLineDash([6,4]); liveX.strokeRect(x, y, w, h); liveX.setLineDash([]);
+      liveX.fillStyle = col; liveX.fillText(d.class, x + 4, y + 14);
+    });
+    $("cVeh").textContent = v; $("cPpl").textContent = p;
+    $("cLit").textContent = l; $("cLitWrap").hidden = l === 0;
+  }
+
+  // ---------------- capture ----------------
+  function grab(max = 768){
+    const src = S.source === "image" ? S.img : video;
+    const w = S.source === "image" ? S.imgW : video.videoWidth, h = S.source === "image" ? S.imgH : video.videoHeight;
+    if (!w || !h) return null;
+    const s = Math.min(1, max / Math.max(w, h)), c = document.createElement("canvas");
     c.width = Math.round(w*s); c.height = Math.round(h*s);
-    c.getContext("2d").drawImage(el, 0, 0, c.width, c.height);
+    c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
     return c;
   }
-  function thumb(canvas){
-    const t = document.createElement("canvas"), s = 220 / canvas.width;
-    t.width = 220; t.height = Math.round(canvas.height*s);
-    t.getContext("2d").drawImage(canvas, 0, 0, t.width, t.height);
-    return t.toDataURL("image/jpeg", .6);
+  function freeze(canvas){
+    if (S.source === "image") return;
+    S.frozen = true; S.frameW = canvas.width; S.frameH = canvas.height;
+    still.src = canvas.toDataURL("image/jpeg", .85); still.hidden = false;
+    liveX.clearRect(0,0,liveC.width,liveC.height);
+  }
+  function unfreeze(){
+    S.frozen = false; S.aiDets = [];
+    if (S.source !== "image"){ still.hidden = true; still.removeAttribute("src"); }
+    aiX.clearRect(0,0,aiC.width,aiC.height);
+    $("peek").classList.remove("show");
   }
 
-  async function analyze(){
-    if (state.busy || !hasMedia()) return;
-    state.busy = true; showErr(); stage.classList.add("busy"); setStatus("Checking…", "busy");
-    const frame = captureFrame();
+  // ---------------- scan with Gemini ----------------
+  async function scan(){
+    if (S.busy || !S.source) return;
+    const frame = grab(); if (!frame) return;
+    S.busy = true; stage.classList.add("busy"); $("shutter").classList.add("busy");
+    navigator.vibrate?.(12);
+    $("flash").classList.remove("go"); void $("flash").offsetWidth; $("flash").classList.add("go");
+    if (S.mode === "once") freeze(frame);
+    $("peek").classList.remove("show");
+    const t0 = performance.now();
+    const tick = setInterval(() => status(`Scanning ${((performance.now()-t0)/1000).toFixed(1)} s`, "busy"), 100);
+    hint("Checking for garbage, littering and traffic…");
     try {
       const r = await fetch("/api/analyze", { method:"POST", headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ image: frame.toDataURL("image/jpeg", .75), mode: state.mode }) });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok){
-        const e = new Error(data.error || `Server returned ${r.status}`); e.status = r.status; throw e;
-      }
-      render(data); state.lastDets = data.detections || []; drawBoxes(); record(data, frame);
+        body: JSON.stringify({ image: frame.toDataURL("image/jpeg", .72), mode: $("focus").value }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok){ const e = new Error(d.error || `Server error ${r.status}`); e.status = r.status; throw e; }
+      d.secs = (performance.now() - t0) / 1000;
+      S.aiDets = d.detections || []; S.aiFadeAt = S.mode === "auto" ? Date.now() + 3500 : Infinity;
+      if (S.mode === "auto"){ S.frameW = frame.width; S.frameH = frame.height; }
+      const marked = annotate(frame, S.aiDets);
+      drawAI(true); showResult(d, marked); record(d, marked);
+      if (S.mode === "auto") setTimeout(() => drawAI(true), 3600);
+      hint(S.mode === "auto" ? `Watching · next scan in ${$("interval").value/1000} s` : "Tap the shutter to scan again");
     } catch (e){
-      if (e.status === 429) showErr("Gemini quota reached", "Wait a minute, or set a longer monitor interval in Settings.");
-      else if (e.status === 404) showErr("Analysis service not found", "Deploy the project on Vercel so /api/analyze exists, or run it with vercel dev.");
-      else if (e instanceof TypeError) showErr("No connection", "Check your internet connection and try again.");
-      else showErr("Check failed", e.message);
+      unfreeze();
+      toast(e.status === 429 ? "Gemini's free limit was reached. Wait a minute or use a longer Auto watch interval."
+        : e.status === 404 ? "The scan service isn't deployed. Deploy on Vercel, or run vercel dev locally."
+        : e.status === 500 && /GEMINI_API_KEY/.test(e.message) ? "The Gemini key is missing on the server. Add GEMINI_API_KEY in Vercel and redeploy."
+        : (e.status === 400 || e.status === 403) && /key/i.test(e.message) ? "The Gemini key was rejected. Check GEMINI_API_KEY in Vercel."
+        : e instanceof TypeError ? "No internet connection. Check your network and try again."
+        : e.message);
+      hint("Tap the shutter to try again");
     } finally {
-      state.busy = false; stage.classList.remove("busy");
-      setStatus(state.timer ? "Monitoring" : "Ready", state.timer ? "live" : "idle");
+      clearInterval(tick); S.busy = false; stage.classList.remove("busy"); $("shutter").classList.remove("busy");
+      status(S.timer ? "Watching" : S.source ? "Live" : "Camera off", S.timer ? "live" : "ok");
     }
   }
 
-  // ---------- render results ----------
+  // burn the AI boxes into a copy of the frame for the result card and history
+  function annotate(frame, dets){
+    const c = document.createElement("canvas"); c.width = frame.width; c.height = frame.height;
+    const x = c.getContext("2d"); x.drawImage(frame, 0, 0);
+    const k = Math.max(1, c.width / 640);
+    x.font = `800 ${Math.round(13*k)}px Overpass, system-ui, sans-serif`;
+    dets.forEach(d => {
+      const [y1,x1,y2,x2] = d.box_2d, col = COL[d.type] || "#fff";
+      const bx = x1/1000*c.width, by = y1/1000*c.height, bw = (x2-x1)/1000*c.width, bh = (y2-y1)/1000*c.height;
+      x.lineWidth = 3*k; x.strokeStyle = col; x.strokeRect(bx, by, bw, bh);
+      const lab = d.label || d.type, tw = x.measureText(lab).width + 12*k, lh = 20*k, ly = by > lh + 2 ? by - lh : by;
+      const lx = Math.max(0, Math.min(bx, c.width - tw));
+      x.fillStyle = col; x.fillRect(lx, ly, tw, lh); x.fillStyle = "#fff"; x.fillText(lab, lx + 6*k, ly + 15*k);
+    });
+    return c;
+  }
+
+  function drawAI(force){
+    if (!S.aiDets.length){ if (force) sizeCanvas(aiC, aiX); return; }
+    if (Date.now() > S.aiFadeAt){ S.aiDets = []; sizeCanvas(aiC, aiX); return; }
+    sizeCanvas(aiC, aiX);
+    const sw = stage.clientWidth, sh = stage.clientHeight, fit = isFit();
+    const mw = S.source === "image" ? S.imgW : S.frameW, mh = S.source === "image" ? S.imgH : S.frameH;
+    const s = fit ? Math.min(sw/mw, sh/mh) : Math.max(sw/mw, sh/mh);
+    const r = { w:mw*s, h:mh*s }; r.x = (sw-r.w)/2; r.y = (sh-r.h)/2;
+    aiX.font = "800 13px Overpass, system-ui, sans-serif"; aiX.lineJoin = "round";
+    S.aiDets.forEach(d => {
+      const [y1,x1,y2,x2] = d.box_2d, col = COL[d.type] || "#fff";
+      const x = r.x + x1/1000*r.w, y = r.y + y1/1000*r.h, w = (x2-x1)/1000*r.w, h = (y2-y1)/1000*r.h;
+      aiX.lineWidth = 6; aiX.strokeStyle = "rgba(0,0,0,.35)"; aiX.strokeRect(x,y,w,h);
+      aiX.lineWidth = 3; aiX.strokeStyle = col; aiX.strokeRect(x,y,w,h);
+      const lab = d.label || d.type, tw = aiX.measureText(lab).width + 14, ly = y > 26 ? y - 24 : y + 2;
+      const lx = Math.max(4, Math.min(x, sw - tw - 4));
+      aiX.fillStyle = col; aiX.beginPath(); aiX.roundRect ? aiX.roundRect(lx, ly, tw, 22, 6) : aiX.rect(lx, ly, tw, 22); aiX.fill();
+      aiX.fillStyle = "#fff"; aiX.fillText(lab, lx + 7, ly + 16);
+    });
+  }
+  new ResizeObserver(() => { drawAI(true); }).observe(stage);
+
+  // ---------------- results ----------------
   const GLYPH = {
     litter:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>',
     garbage:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
     traffic:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><rect x="7" y="2" width="10" height="20" rx="3"/><circle cx="12" cy="7" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="17" r="1.6"/></svg>',
     clear:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round"><path d="m5 12 5 5 9-10"/></svg>'
   };
-  function render(d){
-    $("when").textContent = new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" });
-    const sc = Number.isFinite(+d.cleanliness_score) ? Math.round(+d.cleanliness_score) : null;
-    $("sClean").textContent = sc ?? "–";
-    $("plate").dataset.lvl = sc == null ? "" : sc >= 70 ? "good" : sc >= 40 ? "mid" : "bad";
-    $("sDensity").textContent = d.traffic_density || "–";
-    $("sVeh").textContent = d.vehicle_count ?? "–";
-    $("sPpl").textContent = d.person_count ?? "–";
-    $("summary").textContent = d.summary || "No description returned.";
-    $("todoText").textContent = d.recommended_action || "";
-    $("todo").classList.toggle("show", !!d.recommended_action);
-    $("chips").innerHTML = (d.detections || []).map(x =>
-      `<span class="chip" data-t="${esc(x.type)}">${esc(x.label || x.type)}${x.confidence ? ` <em>${Math.round(x.confidence*100)}%</em>` : ""}</span>`).join("");
+  const KCOL = { litter:"var(--litter)", garbage:"var(--garbage)", traffic:"var(--traffic)", clear:"var(--sign)" };
+  function verdict(d){
+    if (d.littering_detected) return ["litter", "Someone is littering"];
+    if (d.garbage_detected) return ["garbage", "Garbage on the street"];
+    if (d.traffic_issue_detected) return ["traffic", "Traffic problem"];
+    return ["clear", "Street looks clear"];
+  }
+  function lvl(sc){ return sc >= 70 ? "good" : sc >= 40 ? "mid" : "bad"; }
 
-    let k = "clear", txt = "Street looks clear";
-    if (d.littering_detected){ k = "litter"; txt = "Someone is littering"; }
-    else if (d.garbage_detected){ k = "garbage"; txt = "Garbage on the street"; }
-    else if (d.traffic_issue_detected){ k = "traffic"; txt = "Traffic problem spotted"; }
-    const a = $("alert"); a.dataset.k = k; $("alertGlyph").innerHTML = GLYPH[k]; $("alertText").textContent = txt;
-    a.classList.add("show"); clearTimeout(render.t); render.t = setTimeout(() => a.classList.remove("show"), 4500);
+  function showResult(d, frame){
+    S.last = d;
+    const [k, title] = verdict(d);
+    const a = $("alert"); a.dataset.k = k; $("alertGlyph").innerHTML = GLYPH[k]; $("alertText").textContent = title;
+    a.classList.add("show"); clearTimeout(showResult.t); showResult.t = setTimeout(() => a.classList.remove("show"), 3000);
     if (k !== "clear") buzz(k === "litter");
+
+    // peek (phones)
+    const p = $("peek"); p.style.setProperty("--k", KCOL[k]);
+    $("peekH").textContent = title; $("peekS").textContent = d.summary || "";
+    $("peekScore").textContent = d.cleanliness_score ?? "–";
+    if (!isDesktop() && !$("panel").classList.contains("open")) p.classList.add("show");
+
+    $("tab-result").innerHTML = resultHTML(d, k, title, frame ? frame.toDataURL("image/jpeg", .7) : null);
+    if (isDesktop()) setTab("result");
+  }
+  function resultHTML(d, k, title, img){
+    const sc = d.cleanliness_score;
+    const chips = (d.detections || []).map(x => `<span class="chip" data-t="${esc(x.type)}">${esc(x.label)}${x.confidence ? ` <em>${Math.round(x.confidence*100)}%</em>` : ""}</span>`).join("");
+    const sev = d.severity && d.severity !== "none" ? `${esc(d.severity[0].toUpperCase() + d.severity.slice(1))} severity` : "No action needed";
+    return `<div class="card">
+      <div class="verdict" data-k="${k}">${GLYPH[k]}<div>${esc(title)}<small>${sev}</small></div></div>
+      <div class="reading">
+        <div class="plate" data-lvl="${sc == null ? "" : lvl(sc)}"><small>Clean<br>score</small><b>${sc ?? "–"}</b></div>
+        <div class="figs">
+          <div class="fig"><b>${esc(d.traffic_density || "–")}</b><span>Traffic</span></div>
+          <div class="fig"><b>${d.vehicle_count ?? "–"}</b><span>Vehicles</span></div>
+          <div class="fig"><b>${d.person_count ?? "–"}</b><span>People</span></div>
+        </div>
+      </div>
+      <p class="summary">${esc(d.summary || "")}</p>
+      ${d.recommended_action ? `<div class="todo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--garbage)" stroke-width="2.4" stroke-linecap="round" style="flex-shrink:0"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg><div><b>Suggested action</b>${esc(d.recommended_action)}</div></div>` : ""}
+      ${chips ? `<div class="chips">${chips}</div>` : ""}
+      ${img ? `<img class="snap" src="${img}" alt="Scanned frame">` : ""}
+      <div class="meta">Scanned in ${d.secs ? d.secs.toFixed(1) : "–"} s${d.model ? " with " + esc(d.model) : ""}</div>
+    </div>`;
+  }
+  function emptyResult(){
+    $("tab-result").innerHTML = `<div class="empty">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      Aim the camera at a street and tap the shutter. The result shows up here.</div>`;
   }
 
-  // map normalised boxes onto the letterboxed media inside the stage
-  function contentRect(){
-    const sw = stage.clientWidth, sh = stage.clientHeight; const [mw, mh] = mediaSize();
-    if (!mw || !mh) return { x:0, y:0, w:sw, h:sh };
-    const s = Math.min(sw/mw, sh/mh); const w = mw*s, h = mh*s;
-    return { x:(sw-w)/2, y:(sh-h)/2, w, h };
-  }
-  function clearOverlay(){ ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,overlay.width,overlay.height); }
-  function drawBoxes(){
-    const dpr = window.devicePixelRatio || 1, sw = stage.clientWidth, sh = stage.clientHeight;
-    overlay.width = sw*dpr; overlay.height = sh*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,sw,sh);
-    const r = contentRect();
-    ctx.font = "700 13px Overpass, system-ui, sans-serif"; ctx.lineJoin = "round";
-    state.lastDets.forEach(d => {
-      if (!Array.isArray(d.box_2d) || d.box_2d.length !== 4) return;
-      const [y1,x1,y2,x2] = d.box_2d.map(Number);
-      const x = r.x + x1/1000*r.w, y = r.y + y1/1000*r.h, w = (x2-x1)/1000*r.w, h = (y2-y1)/1000*r.h;
-      const col = COLORS[d.type] || "#fff";
-      ctx.lineWidth = 5; ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.strokeRect(x,y,w,h);
-      ctx.lineWidth = 3; ctx.strokeStyle = col; ctx.strokeRect(x,y,w,h);
-      const label = d.label || d.type, tw = ctx.measureText(label).width + 14, ly = y > 24 ? y - 24 : y;
-      ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, ly, tw, 22, 5) : ctx.rect(x, ly, tw, 22); ctx.fill();
-      ctx.fillStyle = "#fff"; ctx.fillText(label, x+7, ly+16);
-    });
-  }
-  new ResizeObserver(() => state.lastDets.length && drawBoxes()).observe(stage);
-
-  // ---------- alerts ----------
-  let audio;
+  // ---------------- alerts ----------------
+  let ac;
   function buzz(strong){
     if (!$("alertsOn").checked) return;
     navigator.vibrate?.(strong ? [220,90,220] : 140);
     try {
-      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-      const o = audio.createOscillator(), g = audio.createGain();
-      o.type = "sine"; o.frequency.value = strong ? 880 : 640;
-      g.gain.setValueAtTime(.0001, audio.currentTime); g.gain.exponentialRampToValueAtTime(.12, audio.currentTime+.02);
-      g.gain.exponentialRampToValueAtTime(.0001, audio.currentTime + (strong ? .4 : .2));
-      o.connect(g).connect(audio.destination); o.start(); o.stop(audio.currentTime + .45);
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+      o.frequency.value = strong ? 880 : 640;
+      g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.14, t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + (strong ? .4 : .2));
+      o.connect(g).connect(ac.destination); o.start(t); o.stop(t + .45);
     } catch {}
   }
 
-  // ---------- incident log ----------
+  // ---------------- history ----------------
+  function thumbURL(c){
+    const t = document.createElement("canvas"), s = 240 / c.width;
+    t.width = 240; t.height = Math.round(c.height*s); t.getContext("2d").drawImage(c, 0, 0, t.width, t.height);
+    return t.toDataURL("image/jpeg", .6);
+  }
   function record(d, frame){
     const inc = d.garbage_detected || d.littering_detected || d.traffic_issue_detected;
     if ($("onlyInc").checked && !inc) return;
-    state.log.unshift({ t:Date.now(), img:thumb(frame), summary:d.summary || "",
-      littering:!!d.littering_detected, garbage:!!d.garbage_detected, traffic:!!d.traffic_issue_detected,
-      score:d.cleanliness_score, density:d.traffic_density, severity:d.severity,
-      labels:(d.detections || []).map(x => x.label).join("; "),
-      lat:state.coords?.latitude, lng:state.coords?.longitude });
-    state.log.splice(MAX_LOG);
-    while (!saveJSON("cityeye_log", state.log) && state.log.length > 5) state.log.pop();
-    renderLog();
+    const img = thumbURL(frame);
+    state_thumb(img);
+    S.log.unshift({ t:Date.now(), img, summary:d.summary || "", littering:!!d.littering_detected, garbage:!!d.garbage_detected,
+      traffic:!!d.traffic_issue_detected, score:d.cleanliness_score, density:d.traffic_density, severity:d.severity,
+      action:d.recommended_action || "", labels:(d.detections || []).map(x => x.label).join("; "),
+      lat:S.coords?.latitude, lng:S.coords?.longitude });
+    S.log.splice(MAX_LOG);
+    while (!store("cityeye_log", S.log) && S.log.length > 5) S.log.pop();
+    renderHistory();
   }
-  function renderLog(){
-    $("logCount").textContent = state.log.length ? state.log.length : "";
-    if (!state.log.length){
-      $("log").innerHTML = `<div class="log-empty">When CityEye finds garbage, littering or a traffic problem, a snapshot appears here.</div>`;
+  function state_thumb(src){ $("thumb").innerHTML = `<img src="${src}" alt="">`; }
+  function renderHistory(){
+    const n = S.log.length;
+    $("histN").textContent = n ? n : ""; $("histBadge").textContent = n > 99 ? "99+" : n; $("histBadge").hidden = !n;
+    if (!n){
+      $("tab-history").innerHTML = `<div class="empty">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+        Incidents you scan are saved here with a photo, time and location.</div>`;
       return;
     }
     const fmt = new Intl.DateTimeFormat([], { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
-    $("log").innerHTML = state.log.map(e => {
-      const kinds = [["littering","Littering"],["garbage","Garbage"],["traffic","Traffic"]].filter(([k]) => e[k]);
-      const tags = (kinds.length ? kinds : [["clear","Clear"]]).map(([k,l]) => `<span class="k" data-t="${k}">${l}</span>`).join("");
-      const map = e.lat ? ` &nbsp;<a href="https://maps.google.com/?q=${e.lat},${e.lng}" target="_blank" rel="noopener">Map</a>` : "";
-      return `<article class="entry"><img src="${e.img}" alt="Snapshot" loading="lazy">
-        <div><div class="kinds">${tags}</div><p>${esc(e.summary)}</p>
-        <time datetime="${new Date(e.t).toISOString()}">${fmt.format(e.t)}</time>${map}</div></article>`;
-    }).join("");
+    $("tab-history").innerHTML = `<div class="hist-tools"><span>Saved on this device</span><div>
+        <button class="text-btn" id="exportBtn">Export CSV</button><button class="text-btn" id="clearBtn">Clear</button></div></div>` +
+      S.log.map(e => {
+        const ks = [["littering","Littering"],["garbage","Garbage"],["traffic","Traffic"]].filter(([k]) => e[k]);
+        const tags = (ks.length ? ks : [["clear","Clear"]]).map(([k,l]) => `<span class="k" data-t="${k}">${l}</span>`).join("");
+        const map = e.lat ? ` · <a href="https://maps.google.com/?q=${e.lat},${e.lng}" target="_blank" rel="noopener">Map</a>` : "";
+        return `<article class="entry"><img src="${e.img}" alt="" loading="lazy"><div><div class="ks">${tags}</div>
+          <p>${esc(e.summary)}</p><time datetime="${new Date(e.t).toISOString()}">${fmt.format(e.t)}</time>${map}</div></article>`;
+      }).join("");
+    $("exportBtn").onclick = exportCSV;
+    $("clearBtn").onclick = () => { if (confirm("Delete all saved incidents on this device?")){ S.log = []; store("cityeye_log", []); renderHistory(); } };
   }
-  $("clearBtn").onclick = () => {
-    if (!state.log.length || !confirm("Delete all logged incidents on this device?")) return;
-    state.log = []; saveJSON("cityeye_log", []); renderLog();
-  };
-  $("exportBtn").onclick = () => {
-    if (!state.log.length) return;
-    const head = ["time","littering","garbage","traffic","severity","cleanliness","traffic_density","summary","labels","lat","lng"];
-    const rows = state.log.map(e => [new Date(e.t).toISOString(), e.littering, e.garbage, e.traffic, e.severity, e.score, e.density, e.summary, e.labels, e.lat ?? "", e.lng ?? ""]);
+  function exportCSV(){
+    const head = ["time","littering","garbage","traffic","severity","cleanliness","traffic_density","summary","action","labels","lat","lng"];
+    const rows = S.log.map(e => [new Date(e.t).toISOString(), e.littering, e.garbage, e.traffic, e.severity, e.score, e.density, e.summary, e.action, e.labels, e.lat ?? "", e.lng ?? ""]);
     const csv = [head, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g,'""')}"`).join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv" }));
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv" }));
     a.download = `cityeye-incidents-${new Date().toISOString().slice(0,10)}.csv`; a.click();
-  };
+  }
 
-  // ---------- monitoring ----------
+  // ---------------- sheet (phones) ----------------
+  function setTab(t){
+    document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
+    $("tab-result").hidden = t !== "result"; $("tab-history").hidden = t !== "history"; $("pbody").scrollTop = 0;
+  }
+  function openSheet(tab){ setTab(tab); $("panel").classList.add("open"); $("scrim").classList.add("show"); $("peek").classList.remove("show"); }
+  function closeSheet(){ $("panel").classList.remove("open"); $("scrim").classList.remove("show"); $("panel").style.transform = ""; }
+  document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => setTab(b.dataset.tab));
+  $("peek").onclick = () => openSheet("result");
+  $("histBtn").onclick = () => openSheet("history");
+  $("closeSheet").onclick = closeSheet; $("scrim").onclick = closeSheet;
+  // drag the handle down to close
+  (() => {
+    let y0 = null, dy = 0; const g = $("grab"), p = $("panel");
+    g.addEventListener("pointerdown", e => { y0 = e.clientY; dy = 0; p.style.transition = "none"; g.setPointerCapture(e.pointerId); });
+    g.addEventListener("pointermove", e => { if (y0 == null) return; dy = Math.max(0, e.clientY - y0); p.style.transform = `translateY(${dy}px)`; });
+    const end = () => { if (y0 == null) return; p.style.transition = ""; p.style.transform = ""; if (dy > 90) closeSheet(); y0 = null; };
+    g.addEventListener("pointerup", end); g.addEventListener("pointercancel", end);
+  })();
+
+  // ---------------- modes & auto watch ----------------
+  function setMode(m){
+    S.mode = m; stopAuto(); if (S.source !== "image") unfreeze();
+    document.querySelectorAll("[data-m]").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === m));
+    $("shutter").classList.toggle("auto", m === "auto");
+    $("shutter").setAttribute("aria-label", m === "auto" ? "Start watching" : "Scan now");
+    if (S.source) hint(m === "auto" ? "Tap to start watching. CityEye scans on its own." : "Tap the shutter to scan the street");
+  }
   function startAuto(){
-    stopAuto(); analyze();
-    state.timer = setInterval(analyze, Number($("interval").value));
-    $("autoBtn").textContent = "Stop"; $("autoBtn").classList.add("stop");
-    setStatus("Monitoring", "live");
-    navigator.wakeLock?.request("screen").then(l => state.wake = l).catch(() => {});
+    stopAuto(); unfreeze();
+    S.timer = setInterval(scan, Number($("interval").value)); scan();
+    $("shutter").classList.add("on"); $("shutter").setAttribute("aria-label", "Stop watching"); status("Watching", "live");
+    navigator.wakeLock?.request("screen").then(l => S.wake = l).catch(() => {});
   }
   function stopAuto(){
-    if (state.timer){ clearInterval(state.timer); state.timer = null; }
-    state.wake?.release?.(); state.wake = null;
-    $("autoBtn").textContent = "Monitor"; $("autoBtn").classList.remove("stop");
-    if (state.source) setStatus("Ready");
+    if (S.timer){ clearInterval(S.timer); S.timer = null; }
+    S.wake?.release?.(); S.wake = null;
+    $("shutter").classList.remove("on");
+    if (S.mode === "auto") $("shutter").setAttribute("aria-label", "Start watching");
+    if (S.source) status("Live", "ok");
   }
-
-  // ---------- wiring ----------
-  $("camBtn").onclick = () => state.source === "camera" ? stopMedia() : startCamera();
-  $("emptyCam").onclick = startCamera;
-  $("flipBtn").onclick = () => { state.facing = state.facing === "environment" ? "user" : "environment"; startCamera(); };
-  $("snapBtn").onclick = analyze;
-  $("autoBtn").onclick = () => state.timer ? stopAuto() : startAuto();
-  $("mode").onclick = e => {
-    const b = e.target.closest("button"); if (!b) return;
-    state.mode = b.dataset.mode;
-    [...$("mode").children].forEach(x => x.setAttribute("aria-pressed", x === b));
+  document.querySelectorAll("[data-m]").forEach(b => b.onclick = () => setMode(b.dataset.m));
+  $("shutter").onclick = () => {
+    if (S.mode === "auto") return S.timer ? (stopAuto(), hint("Tap to start watching. CityEye scans on its own.")) : startAuto();
+    if (S.frozen && !S.busy){ unfreeze(); }
+    scan();
   };
+  // tap the frozen frame to go back to live
+  stage.addEventListener("click", e => {
+    if (S.frozen && !S.busy && !e.target.closest("button,label,.peek,.controls,.top")){ unfreeze(); hint("Tap the shutter to scan the street"); }
+  });
+
+  // ---------------- settings ----------------
   $("settingsBtn").onclick = () => $("settings").showModal();
   $("settings").addEventListener("click", e => { if (e.target === $("settings")) $("settings").close(); });
-  ["alertsOn","onlyInc"].forEach(id => $(id).onchange = savePrefs);
-  $("interval").onchange = () => { savePrefs(); if (state.timer) startAuto(); };
-
+  ["focus","alertsOn","onlyInc"].forEach(id => $(id).onchange = savePrefs);
+  $("interval").onchange = () => { savePrefs(); if (S.timer) startAuto(); };
+  $("liveOn").onchange = () => { savePrefs(); if ($("liveOn").checked && S.source) startLive(); else { $("counts").hidden = true; liveX.clearRect(0,0,liveC.width,liveC.height); } };
   function watchGPS(on){
-    if (state.geo != null){ navigator.geolocation.clearWatch(state.geo); state.geo = null; }
-    state.coords = null; if (!on) return;
-    if (!navigator.geolocation){ $("gpsOn").checked = false; savePrefs(); return; }
-    state.geo = navigator.geolocation.watchPosition(p => state.coords = p.coords,
-      err => { showErr("Location is off", err.message); $("gpsOn").checked = false; savePrefs(); },
-      { enableHighAccuracy:true });
+    if (S.geo != null){ navigator.geolocation.clearWatch(S.geo); S.geo = null; }
+    S.coords = null; if (!on || !navigator.geolocation) return;
+    S.geo = navigator.geolocation.watchPosition(p => S.coords = p.coords,
+      () => { toast("Location is blocked, so incidents are saved without GPS."); $("gpsOn").checked = false; savePrefs(); },
+      { enableHighAccuracy:true, maximumAge:15000 });
   }
   $("gpsOn").onchange = e => { savePrefs(); watchGPS(e.target.checked); };
   if ($("gpsOn").checked) watchGPS(true);
 
+  // ---------------- keyboard (desktop) ----------------
   document.addEventListener("keydown", e => {
-    if (e.target.closest("input,select,textarea,dialog") || e.metaKey || e.ctrlKey) return;
-    if (e.code === "Space" && !$("snapBtn").disabled){ e.preventDefault(); analyze(); }
-    if (e.key.toLowerCase() === "m" && !$("autoBtn").disabled){ state.timer ? stopAuto() : startAuto(); }
+    if (e.target.closest("input,select,textarea,dialog") || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.code === "Space" && !$("shutter").disabled){ e.preventDefault(); $("shutter").click(); }
+    if (e.key === "Escape"){ closeSheet(); if (S.frozen) unfreeze(); }
   });
-  document.addEventListener("visibilitychange", () => { if (document.hidden) stopAuto(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopAuto(); else if (S.detector && S.source) liveLoop();
+  });
 
-  renderLog();
+  // ---------------- boot: camera first ----------------
+  emptyResult(); renderHistory();
+  if (S.log[0]) state_thumb(S.log[0].img);
+  (async () => {
+    // If camera permission was already given, open the camera straight away.
+    try {
+      const p = await navigator.permissions?.query({ name:"camera" });
+      if (p?.state === "granted" || (load("cityeye_cam", false) && !p)) startCamera();
+    } catch {}
+  })();
 })();
 </script>
 </body>
