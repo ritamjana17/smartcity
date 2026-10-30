@@ -1,0 +1,10 @@
+{
+  "name": "CityEye – Smart City Surveillance",
+  "short_name": "CityEye",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ECEEEA",
+  "theme_color": "#0E6B45",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

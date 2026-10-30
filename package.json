@@ -1,0 +1,8 @@
+{
+  "name": "cityeye-smart-city",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AI-powered smart city surveillance for littering and traffic, using Gemini",
+  "engines": { "node": ">=18" }
+}
