@@ -78,6 +78,14 @@
     .counts{position:absolute;z-index:4;left:12px;top:calc(var(--safe-t) + 66px);display:flex;gap:6px}
     .counts .pill{height:30px;font-size:13px;padding:0 10px;gap:6px}
     .counts svg{width:16px;height:16px}
+    .clean-pill i{background:#9AA6B0}
+    .clean-pill[data-v="clean"] i{background:#3DDC97}
+    .clean-pill[data-v="dirty"] i{background:#FF9A3C}
+    .model-row{display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;border-radius:12px;border:1px solid var(--rule);font-size:14px}
+    .model-row .bar{flex:1;height:8px;border-radius:4px;background:var(--rule);overflow:hidden}
+    .model-row .bar span{display:block;height:100%;background:var(--garbage)}
+    .model-row b{white-space:nowrap}
+    .opt a{color:var(--traffic);font-weight:700;text-decoration:none}
 
     /* alert banner */
     .alert{position:absolute;z-index:6;left:50%;top:calc(var(--safe-t) + 108px);transform:translate(-50%,-10px);opacity:0;
@@ -265,6 +273,7 @@
     </div>
 
     <div class="counts" id="counts" hidden>
+      <span class="pill clean-pill" id="cleanPill" hidden title="Trained street cleanliness model (Kaggle dataset)"><i id="cleanDot"></i><span id="cleanTxt">Model…</span></span>
       <span class="pill" title="Vehicles seen live"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 17h14M5 17v-5l2-5h10l2 5v5M5 12h14"/><circle cx="8" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/></svg><span id="cVeh">0</span></span>
       <span class="pill" title="People seen live"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="5" r="2.5"/><path d="M12 8v7M8 22l4-7 4 7M7 11h10"/></svg><span id="cPpl">0</span></span>
       <span class="pill" title="Litter-like objects seen live" id="cLitWrap" hidden style="color:#FFC08A"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span id="cLit">0</span></span>
@@ -358,6 +367,10 @@
       </select></label>
     <label class="opt"><div><b>Live object boxes</b><span>Counts vehicles and people on the phone, instantly</span></div>
       <input type="checkbox" class="switch" id="liveOn" checked></label>
+    <label class="opt"><div><b>Cleanliness model</b><span>Live clean / littered reading from the model trained on the Kaggle dataset</span></div>
+      <input type="checkbox" class="switch" id="cleanOn" checked></label>
+    <div class="opt"><div><b>Dataset &amp; model</b><span>See the training data, accuracy and test the model</span></div>
+      <a href="/model.html">Open</a></div>
     <label class="opt"><div><b>Alerts</b><span>Beep and vibrate when something is found</span></div>
       <input type="checkbox" class="switch" id="alertsOn" checked></label>
     <label class="opt"><div><b>Location</b><span>Attach GPS to each incident</span></div>
@@ -368,6 +381,7 @@
   </form>
 </dialog>
 
+<script src="/cleanliness.js"></script>
 <script>
 (() => {
   "use strict";
@@ -392,12 +406,12 @@
   function load(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }
   function store(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } }
   const prefs = load("cityeye_prefs", {});
-  ["focus","interval","liveOn","alertsOn","gpsOn","onlyInc"].forEach(id => {
+  ["focus","interval","liveOn","cleanOn","alertsOn","gpsOn","onlyInc"].forEach(id => {
     if (prefs[id] === undefined) return; const el = $(id);
     el.type === "checkbox" ? (el.checked = prefs[id]) : (el.value = prefs[id]);
   });
   function savePrefs(){ store("cityeye_prefs", { focus:$("focus").value, interval:$("interval").value,
-    liveOn:$("liveOn").checked, alertsOn:$("alertsOn").checked, gpsOn:$("gpsOn").checked, onlyInc:$("onlyInc").checked }); }
+    liveOn:$("liveOn").checked, cleanOn:$("cleanOn").checked, alertsOn:$("alertsOn").checked, gpsOn:$("gpsOn").checked, onlyInc:$("onlyInc").checked }); }
 
   // ---------------- ui helpers ----------------
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -495,17 +509,47 @@
   // ---------------- on-device live detection (instant) ----------------
   const VEH = new Set(["car","bus","truck","motorcycle","bicycle"]);
   const LIT = new Set(["bottle","cup","handbag","backpack","suitcase","bowl","wine glass"]);
-  function loadScript(src){ return new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.async = true; s.crossOrigin = "anonymous"; s.onload = ok; s.onerror = no; document.head.appendChild(s); }); }
+  const loadScript = (src) => window.CityEyeModel.loadScript(src);
+  // ---------------- trained cleanliness model (Kaggle dataset) ----------------
+  async function startClean(){
+    if (!$("cleanOn").checked){ $("cleanPill").hidden = true; return; }
+    $("counts").hidden = false; $("cleanPill").hidden = false;
+    try { await window.CityEyeModel.load(); S.cleanReady = true; cleanLoop(); }
+    catch (e){ S.cleanReady = false; $("cleanPill").hidden = true; if (!$("liveOn").checked) $("counts").hidden = true; if (!e.missing) console.warn(e); }
+  }
+  function cleanLoop(){
+    clearTimeout(S.cleanTimer);
+    const tick = async () => {
+      if (!S.cleanReady || !$("cleanOn").checked || document.hidden) return;
+      const playing = (S.source === "camera" || S.source === "video") && video.readyState >= 2 && !S.frozen;
+      if (playing){
+        try {
+          const p = await window.CityEyeModel.predict(video);
+          S.cleanP = S.cleanP == null ? p : S.cleanP * 0.6 + p * 0.4;   // smooth out flicker
+          showCleanPill(S.cleanP);
+        } catch {}
+      }
+      S.cleanTimer = setTimeout(tick, 700);
+    };
+    tick();
+  }
+  function showCleanPill(p){
+    const dirty = p >= 0.5;
+    $("cleanPill").dataset.v = dirty ? "dirty" : "clean";
+    $("cleanTxt").textContent = dirty ? `Littered ${Math.round(p*100)}%` : `Clean ${Math.round((1-p)*100)}%`;
+  }
+
   async function startLive(){
-    if (!$("liveOn").checked){ $("counts").hidden = true; return; }
-    $("counts").hidden = false;
+    startClean();
+    if (!$("liveOn").checked){ $("counts").hidden = $("cleanPill").hidden; return; }
+    $("counts").hidden = false; ["cVeh","cPpl"].forEach(id => $(id).parentElement.hidden = false);
     if (!S.detector && !S.detLoading){
       S.detLoading = true; $("cVeh").textContent = "…"; $("cPpl").textContent = "…";
       try {
         await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js");
         await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js");
         S.detector = await window.cocoSsd.load({ base:"lite_mobilenet_v2" });
-      } catch { $("counts").hidden = true; S.detLoading = false; return; }
+      } catch { S.detLoading = false; ["cVeh","cPpl"].forEach(id => $(id).parentElement.hidden = true); return; }
       S.detLoading = false;
     }
     liveLoop();
@@ -578,6 +622,7 @@
     if (S.mode === "once") freeze(frame);
     $("peek").classList.remove("show");
     const t0 = performance.now();
+    const localP = S.cleanReady && $("cleanOn").checked ? window.CityEyeModel.predict(frame).catch(() => null) : Promise.resolve(null);
     const tick = setInterval(() => status(`Scanning ${((performance.now()-t0)/1000).toFixed(1)} s`, "busy"), 100);
     hint("Checking for garbage, littering and traffic…");
     try {
@@ -586,6 +631,7 @@
       const d = await r.json().catch(() => ({}));
       if (!r.ok){ const e = new Error(d.error || `Server error ${r.status}`); e.status = r.status; throw e; }
       d.secs = (performance.now() - t0) / 1000;
+      d.model_dirty = await localP;
       S.aiDets = d.detections || []; S.aiFadeAt = S.mode === "auto" ? Date.now() + 3500 : Infinity;
       if (S.mode === "auto"){ S.frameW = frame.width; S.frameH = frame.height; }
       const marked = annotate(frame, S.aiDets);
@@ -593,6 +639,20 @@
       if (S.mode === "auto") setTimeout(() => drawAI(true), 3600);
       hint(S.mode === "auto" ? `Watching · next scan in ${$("interval").value/1000} s` : "Tap the shutter to scan again");
     } catch (e){
+      const p = await localP;
+      if (p != null){
+        // Gemini unavailable: fall back to the trained on-device model so the user still gets an answer
+        const d = { garbage_detected: p >= 0.5, littering_detected: false, traffic_issue_detected: false,
+          cleanliness_score: Math.round((1 - p) * 100), traffic_density: null, vehicle_count: null, person_count: null,
+          severity: p >= 0.8 ? "medium" : p >= 0.5 ? "low" : "none", detections: [], model_dirty: p, offline: true,
+          summary: p >= 0.5 ? "The trained model sees a littered street. Gemini was not reachable, so there are no detailed boxes."
+                            : "The trained model sees a clean street. Gemini was not reachable, so this is a quick check only.",
+          recommended_action: p >= 0.5 ? "Check the area and schedule cleaning." : "",
+          model: "on-device model only", secs: (performance.now() - t0) / 1000 };
+        S.aiDets = []; showResult(d, frame); record(d, frame);
+        hint("Gemini unavailable: showing the on-device model result");
+        return;
+      }
       unfreeze();
       toast(e.status === 429 ? "Gemini's free limit was reached. Wait a minute or use a longer Auto watch interval."
         : e.status === 404 ? "The scan service isn't deployed. Deploy on Vercel, or run vercel dev locally."
@@ -696,6 +756,7 @@
       ${d.recommended_action ? `<div class="todo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--garbage)" stroke-width="2.4" stroke-linecap="round" style="flex-shrink:0"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg><div><b>Suggested action</b>${esc(d.recommended_action)}</div></div>` : ""}
       ${chips ? `<div class="chips">${chips}</div>` : ""}
       ${img ? `<img class="snap" src="${img}" alt="Scanned frame">` : ""}
+      ${d.model_dirty != null ? `<div class="model-row" title="Model trained on the Kaggle Clean/Dirty Road dataset"><span>Trained model</span><span class="bar"><span style="width:${Math.round(d.model_dirty*100)}%"></span></span><b>${d.model_dirty >= 0.5 ? "Littered" : "Clean"} ${Math.round((d.model_dirty >= 0.5 ? d.model_dirty : 1 - d.model_dirty)*100)}%</b></div>` : ""}
       <div class="meta">Scanned in ${d.secs ? d.secs.toFixed(1) : "–"} s${d.model ? " with " + esc(d.model) : ""}</div>
     </div>`;
   }
@@ -733,6 +794,7 @@
     S.log.unshift({ t:Date.now(), img, summary:d.summary || "", littering:!!d.littering_detected, garbage:!!d.garbage_detected,
       traffic:!!d.traffic_issue_detected, score:d.cleanliness_score, density:d.traffic_density, severity:d.severity,
       action:d.recommended_action || "", labels:(d.detections || []).map(x => x.label).join("; "),
+      model_dirty: d.model_dirty == null ? null : Math.round(d.model_dirty * 1000) / 1000, offline: !!d.offline,
       lat:S.coords?.latitude, lng:S.coords?.longitude });
     S.log.splice(MAX_LOG);
     while (!store("cityeye_log", S.log) && S.log.length > 5) S.log.pop();
@@ -762,8 +824,8 @@
     $("clearBtn").onclick = () => { if (confirm("Delete all saved incidents on this device?")){ S.log = []; store("cityeye_log", []); renderHistory(); } };
   }
   function exportCSV(){
-    const head = ["time","littering","garbage","traffic","severity","cleanliness","traffic_density","summary","action","labels","lat","lng"];
-    const rows = S.log.map(e => [new Date(e.t).toISOString(), e.littering, e.garbage, e.traffic, e.severity, e.score, e.density, e.summary, e.action, e.labels, e.lat ?? "", e.lng ?? ""]);
+    const head = ["time","littering","garbage","traffic","severity","cleanliness","traffic_density","model_dirty_prob","summary","action","labels","lat","lng"];
+    const rows = S.log.map(e => [new Date(e.t).toISOString(), e.littering, e.garbage, e.traffic, e.severity, e.score, e.density, e.model_dirty ?? "", e.summary, e.action, e.labels, e.lat ?? "", e.lng ?? ""]);
     const csv = [head, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g,'""')}"`).join(",")).join("\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv" }));
     a.download = `cityeye-incidents-${new Date().toISOString().slice(0,10)}.csv`; a.click();
@@ -826,7 +888,8 @@
   $("settings").addEventListener("click", e => { if (e.target === $("settings")) $("settings").close(); });
   ["focus","alertsOn","onlyInc"].forEach(id => $(id).onchange = savePrefs);
   $("interval").onchange = () => { savePrefs(); if (S.timer) startAuto(); };
-  $("liveOn").onchange = () => { savePrefs(); if ($("liveOn").checked && S.source) startLive(); else { $("counts").hidden = true; liveX.clearRect(0,0,liveC.width,liveC.height); } };
+  $("cleanOn").onchange = () => { savePrefs(); if (S.source) startClean(); if (!$("cleanOn").checked){ $("cleanPill").hidden = true; } };
+  $("liveOn").onchange = () => { savePrefs(); if ($("liveOn").checked && S.source) startLive(); else { ["cVeh","cPpl","cLit"].forEach(id => $(id).parentElement.hidden = true); $("counts").hidden = $("cleanPill").hidden; liveX.clearRect(0,0,liveC.width,liveC.height); } };
   function watchGPS(on){
     if (S.geo != null){ navigator.geolocation.clearWatch(S.geo); S.geo = null; }
     S.coords = null; if (!on || !navigator.geolocation) return;
@@ -844,7 +907,7 @@
     if (e.key === "Escape"){ closeSheet(); if (S.frozen) unfreeze(); }
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) stopAuto(); else if (S.detector && S.source) liveLoop();
+    if (document.hidden) stopAuto(); else if (S.source){ if (S.detector) liveLoop(); if (S.cleanReady) cleanLoop(); }
   });
 
   // ---------------- boot: camera first ----------------

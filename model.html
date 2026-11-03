@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0E6B45" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <title>CityEye – Dataset and model</title>
+  <style>
+    :root{
+      --sign:#0E6B45; --sign-hi:#14895A; --garbage:#E8701A; --litter:#D7263D; --traffic:#2F6FD0;
+      --page:#ECEEEA; --paper:#FFFFFF; --ink:#18212B; --ink-2:#5A6570; --rule:#DCE0DA;
+      --font:"Overpass",system-ui,-apple-system,"Segoe UI",sans-serif;
+    }
+    @media (prefers-color-scheme: dark){ :root{ --page:#151B20; --paper:#1D242B; --ink:#ECEFEA; --ink-2:#9AA6B0; --rule:#2E3841; } }
+    *{box-sizing:border-box}
+    html{background:var(--page);color:var(--ink);font-family:var(--font);line-height:1.5;-webkit-text-size-adjust:100%}
+    body{margin:0;padding:0 0 60px}
+    a{color:var(--traffic);font-weight:700;overflow-wrap:anywhere}
+    header{background:var(--sign);color:#fff;padding:calc(env(safe-area-inset-top) + 14px) 16px 22px}
+    header .in{max-width:960px;margin:0 auto}
+    header a{color:#fff;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;gap:6px;font-size:15px;opacity:.9}
+    header h1{margin:14px 0 6px;font-size:clamp(28px,6vw,40px);line-height:1.05;font-weight:900}
+    header p{margin:0;max-width:62ch;opacity:.88}
+    main{max-width:960px;margin:0 auto;padding:16px;display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+    section{background:var(--paper);border:1px solid var(--rule);border-radius:18px;padding:20px}
+    h2{margin:0 0 4px;font-size:22px;font-weight:800}
+    .sub{margin:0 0 16px;color:var(--ink-2);max-width:68ch}
+    .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+    .fact{border-left:4px solid var(--rule);padding:4px 0 4px 12px}
+    .fact b{display:block;font-size:26px;font-weight:900;line-height:1.1}
+    .fact span{font-size:13px;color:var(--ink-2)}
+    .fact.g{border-color:var(--sign)} .fact.o{border-color:var(--garbage)} .fact.b{border-color:var(--traffic)}
+    table{border-collapse:collapse;width:100%;font-size:15px}
+    th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--rule)}
+    th{font-size:13px;color:var(--ink-2);font-weight:700}
+    td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+    .tile{position:relative;border-radius:12px;overflow:hidden;background:#20262C;aspect-ratio:4/3}
+    .tile img{width:100%;height:100%;object-fit:cover;display:block}
+    .tag{position:absolute;left:6px;bottom:6px;font-size:12px;font-weight:800;color:#fff;padding:2px 7px 1px;border-radius:6px}
+    .tag.clean{background:var(--sign)} .tag.dirty{background:var(--garbage)}
+    .mark{position:absolute;right:6px;top:6px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-weight:900;color:#fff;font-size:14px}
+    .mark.ok{background:var(--sign)} .mark.no{background:var(--litter)}
+    .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+    figure{margin:0;border:1px solid var(--rule);border-radius:14px;padding:10px;background:#fff}
+    figure img{width:100%;display:block}
+    figcaption{font-size:13px;color:#5A6570;margin-top:6px}
+    .steps{margin:0;padding-left:22px} .steps li{margin:6px 0}
+    .btn{height:50px;border-radius:12px;border:0;background:var(--sign-hi);color:#fff;font:inherit;font-weight:800;font-size:16px;padding:2px 20px 0;cursor:pointer}
+    .btn.alt{background:transparent;color:var(--ink);border:1.5px solid var(--rule)}
+    .btn:disabled{opacity:.5;cursor:default}
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    .progress{height:10px;border-radius:5px;background:var(--rule);overflow:hidden;margin:14px 0;display:none}
+    .progress span{display:block;height:100%;width:0;background:var(--sign-hi);transition:width .2s}
+    .note{font-size:14px;color:var(--ink-2)}
+    .warn{background:color-mix(in srgb,var(--garbage) 12%,var(--paper));border:1px solid color-mix(in srgb,var(--garbage) 40%,transparent);border-radius:12px;padding:14px}
+    .cm{width:auto;margin-top:10px} .cm td{text-align:center;font-weight:800;font-size:18px;width:80px}
+    .try{display:grid;grid-template-columns:minmax(0,260px) 1fr;gap:16px;align-items:center;margin-top:14px}
+    .try img{width:100%;border-radius:12px}
+    .verdict{font-size:24px;font-weight:900}
+    @media (max-width:560px){ .try{grid-template-columns:1fr} section{padding:16px} th,td{padding:8px 5px;font-size:14px} .cm td{width:auto} }
+    .scroll{overflow-x:auto}
+    input[type=file]{display:none}
+    code{background:var(--page);padding:1px 6px;border-radius:5px;font-size:14px}
+  </style>
+</head>
+<body>
+  <header><div class="in">
+    <a href="/">← Back to the camera</a>
+    <h1>Dataset and model</h1>
+    <p>CityEye's live cleanliness reading comes from a model trained on a public Kaggle dataset of clean and littered roads. This page shows the data, how well the model scores, and lets you test it in your own browser.</p>
+  </div></header>
+
+  <main>
+    <section id="setup" hidden>
+      <h2>The model hasn't been added yet</h2>
+      <p class="sub">The files from the training notebook are missing from this deployment.</p>
+      <ol class="steps">
+        <li>Open <code>training/cityeye_training.ipynb</code> on Kaggle and run it.</li>
+        <li>Download <code>cityeye_outputs.zip</code> from the notebook's Output.</li>
+        <li>Unzip it into the project folder so it adds <code>dataset/</code>, <code>model/</code> and <code>results/</code>.</li>
+        <li>Commit and push to GitHub. Vercel redeploys and this page fills in.</li>
+      </ol>
+    </section>
+
+    <section id="dataset">
+      <h2>Dataset</h2>
+      <p class="sub"><b>Clean/Dirty Road Classification</b>, from Kaggle:
+        <a href="https://www.kaggle.com/datasets/faizalkarim/cleandirty-road-classification" target="_blank" rel="noopener">kaggle.com/datasets/faizalkarim/cleandirty-road-classification</a>.
+        Photos of roads labelled <i>clean</i> or <i>dirty</i> (littered). Duplicates were removed and the images were split 70 / 15 / 15 into training, validation and test sets, keeping the same clean-to-dirty ratio in each.</p>
+      <div class="facts" id="dsFacts"></div>
+      <div class="scroll"><table id="splitTable"></table></div>
+      <h3 style="margin:20px 0 10px;font-size:17px">Sample images</h3>
+      <div class="grid" id="samples"></div>
+    </section>
+
+    <section id="training">
+      <h2>How the model was trained</h2>
+      <ol class="steps">
+        <li>Every image is resized to 224 × 224 pixels.</li>
+        <li><b>MobileNetV2</b>, a network pre-trained on ImageNet, turns each image into 1,280 numbers that describe what it shows.</li>
+        <li>A <b>logistic regression</b> classifier learns from those numbers to tell clean roads from littered ones. Its setting is chosen with 5-fold cross-validation, and mirror images are added as extra training data.</li>
+        <li>The classifier is tested on images it never saw during training.</li>
+        <li>The result is a small file (about 20 KB), <code>model/cleanliness_model.json</code>, that the app runs live on the phone.</li>
+      </ol>
+    </section>
+
+    <section id="results">
+      <h2>Results on the test set</h2>
+      <p class="sub" id="resSub">Measured in the Kaggle notebook on the held-out test images.</p>
+      <div class="facts" id="resFacts"></div>
+      <div id="gemini"></div>
+      <div class="figs" id="figs"></div>
+    </section>
+
+    <section id="browserTest">
+      <h2>Test the model in your browser</h2>
+      <p class="sub">Runs the trained model on this device against the test images and checks that it gives the same answers as in the notebook.</p>
+      <div class="row">
+        <button class="btn" id="runTest">Run on test images</button>
+        <label class="btn alt" for="ownFile" style="display:inline-flex;align-items:center">Try your own photo</label>
+        <input type="file" id="ownFile" accept="image/*">
+      </div>
+      <div class="progress" id="prog"><span></span></div>
+      <p class="note" id="testMsg"></p>
+      <div id="testOut"></div>
+      <div class="try" id="tryOut" hidden><img id="tryImg" alt="Your photo"><div><div class="verdict" id="tryVerdict"></div><div class="note" id="tryNote"></div></div></div>
+    </section>
+  </main>
+
+<script src="/cleanliness.js"></script>
+<script>
+(async () => {
+  const $ = id => document.getElementById(id);
+  const pct = v => v == null || isNaN(v) ? "–" : (v * 100).toFixed(1) + "%";
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  async function getJSON(u){ const r = await fetch(u, { cache:"no-cache" }); if (!r.ok) throw new Error(r.status); return r.json(); }
+  async function getCSV(u){
+    const r = await fetch(u, { cache:"no-cache" }); if (!r.ok) throw new Error(r.status);
+    const [head, ...lines] = (await r.text()).trim().split(/\r?\n/);
+    const keys = head.split(",");
+    return lines.map(l => { const v = l.split(","); return Object.fromEntries(keys.map((k, i) => [k, v[i]])); });
+  }
+
+  let metrics = null, split = null, pyPreds = null;
+  try { metrics = await getJSON("/results/metrics.json"); } catch {}
+  try { split = await getCSV("/dataset/split.csv"); } catch {}
+  try { pyPreds = await getCSV("/results/test_predictions.csv"); } catch {}
+  if (!metrics || !split){ $("setup").hidden = false; ["results","browserTest"].forEach(id => $(id).hidden = true); }
+
+  // ---------- dataset ----------
+  if (split){
+    const n = (f) => split.filter(f).length;
+    const C = r => r.label === "clean", D = r => r.label === "dirty";
+    $("dsFacts").innerHTML = `
+      <div class="fact"><b>${split.length}</b><span>unique images</span></div>
+      <div class="fact g"><b>${n(C)}</b><span>clean roads</span></div>
+      <div class="fact o"><b>${n(D)}</b><span>littered roads</span></div>
+      <div class="fact b"><b>2</b><span>classes</span></div>`;
+    const rows = ["train","val","test"].map(sp => {
+      const c = n(r => r.split === sp && C(r)), d = n(r => r.split === sp && D(r));
+      return `<tr><td>${{train:"Training",val:"Validation",test:"Test"}[sp]}</td><td class="n">${c}</td><td class="n">${d}</td><td class="n"><b>${c + d}</b></td></tr>`;
+    }).join("");
+    $("splitTable").innerHTML = `<tr><th>Split</th><th class="n">Clean</th><th class="n">Dirty</th><th class="n">Total</th></tr>${rows}`;
+    const pick = [...split.filter(C).slice(0, 6), ...split.filter(D).slice(0, 6)];
+    $("samples").innerHTML = pick.map(r => `<div class="tile"><img src="/dataset/${esc(r.path)}" alt="${esc(r.label)} road" loading="lazy"><span class="tag ${esc(r.label)}">${esc(r.label)}</span></div>`).join("");
+  } else {
+    $("dsFacts").innerHTML = ""; $("splitTable").innerHTML = ""; $("samples").innerHTML = `<p class="note">Dataset files not found in <code>dataset/</code>.</p>`;
+  }
+
+  // ---------- results ----------
+  if (metrics){
+    const t = metrics.results.test, m = metrics.method;
+    $("resFacts").innerHTML = `
+      <div class="fact g"><b>${pct(t.accuracy)}</b><span>accuracy</span></div>
+      <div class="fact"><b>${pct(t.precision)}</b><span>precision (dirty)</span></div>
+      <div class="fact"><b>${pct(t.recall)}</b><span>recall (dirty)</span></div>
+      <div class="fact"><b>${pct(t.f1)}</b><span>F1 score</span></div>
+      <div class="fact b"><b>${t.roc_auc != null ? t.roc_auc.toFixed(3) : "–"}</b><span>ROC AUC</span></div>
+      <div class="fact"><b>${pct(m.cv_accuracy_mean)}</b><span>5-fold CV (± ${pct(m.cv_accuracy_std)})</span></div>`;
+    $("resSub").textContent = `Measured in the Kaggle notebook on ${t.confusion_matrix.flat().reduce((a, b) => a + b, 0)} held-out test images. Validation accuracy ${pct(metrics.results.val.accuracy)}.`;
+    if (metrics.gemini){
+      const g = metrics.gemini;
+      $("gemini").innerHTML = `<h3 style="margin:6px 0 8px;font-size:17px">Compared with Gemini on the same test images</h3>
+        <div class="scroll"><table><tr><th>Model</th><th class="n">Accuracy</th><th class="n">Precision</th><th class="n">Recall</th><th class="n">F1</th></tr>
+        <tr><td>Trained model (on-device)</td><td class="n">${pct(t.accuracy)}</td><td class="n">${pct(t.precision)}</td><td class="n">${pct(t.recall)}</td><td class="n">${pct(t.f1)}</td></tr>
+        <tr><td>Gemini (${esc(g.model)})</td><td class="n">${pct(g.accuracy)}</td><td class="n">${pct(g.precision)}</td><td class="n">${pct(g.recall)}</td><td class="n">${pct(g.f1)}</td></tr></table></div><br>`;
+    }
+    const figs = [["confusion_matrix","Confusion matrix on the test set"],["roc_curve","ROC curve"],["probability_histogram","How confident the model is"],
+      ["hyperparameter_search","Cross-validation accuracy for each setting"],["class_distribution","Images per class"],["model_vs_gemini","Trained model vs Gemini"],["misclassified","Test images the model got wrong"]];
+    $("figs").innerHTML = figs.map(([f, c]) => `<figure><img src="/results/${f}.png" alt="${c}" loading="lazy" onerror="this.parentElement.remove()"><figcaption>${c}</figcaption></figure>`).join("");
+  }
+
+  // ---------- in-browser test ----------
+  function loadImg(src){ return new Promise((ok, no) => { const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => ok(i); i.onerror = no; i.src = src; }); }
+  $("runTest").onclick = async () => {
+    const test = (split || []).filter(r => r.split === "test");
+    if (!test.length) return;
+    $("runTest").disabled = true; $("prog").style.display = "block"; $("testOut").innerHTML = "";
+    $("testMsg").textContent = "Downloading MobileNetV2 and the trained model (about 14 MB the first time)…";
+    try {
+      await window.CityEyeModel.load();
+    } catch (e){ $("testMsg").textContent = "Could not load the model: " + e.message; $("runTest").disabled = false; return; }
+    const py = Object.fromEntries((pyPreds || []).map(r => [r.path, parseFloat(r.prob_dirty)]));
+    const out = []; let diffs = [];
+    const t0 = performance.now();
+    for (let i = 0; i < test.length; i++){
+      const r = test[i];
+      $("testMsg").textContent = `Testing image ${i + 1} of ${test.length}…`;
+      $("prog").firstElementChild.style.width = `${(i + 1) / test.length * 100}%`;
+      try {
+        const img = await loadImg(`/dataset/${r.path}`);
+        const p = await window.CityEyeModel.predict(img);
+        if (py[r.path] != null) diffs.push(Math.abs(p - py[r.path]));
+        out.push({ ...r, p, pred: p >= 0.5 ? "dirty" : "clean" });
+      } catch {}
+    }
+    const ms = (performance.now() - t0) / out.length;
+    const tp = out.filter(o => o.label === "dirty" && o.pred === "dirty").length, tn = out.filter(o => o.label === "clean" && o.pred === "clean").length;
+    const fp = out.filter(o => o.label === "clean" && o.pred === "dirty").length, fn = out.filter(o => o.label === "dirty" && o.pred === "clean").length;
+    const acc = (tp + tn) / out.length, prec = tp / (tp + fp || 1), rec = tp / (tp + fn || 1), f1 = 2 * prec * rec / (prec + rec || 1);
+    const agree = diffs.length ? `Average difference from the notebook's probabilities: ${(diffs.reduce((a, b) => a + b, 0) / diffs.length).toFixed(3)} (0 = identical).` : "";
+    $("testMsg").textContent = `Done: ${out.length} test images in your browser, about ${Math.round(ms)} ms per image. ${agree}`;
+    $("testOut").innerHTML = `<div class="facts" style="margin-top:12px">
+        <div class="fact g"><b>${pct(acc)}</b><span>accuracy in browser</span></div>
+        <div class="fact"><b>${pct(prec)}</b><span>precision</span></div>
+        <div class="fact"><b>${pct(rec)}</b><span>recall</span></div>
+        <div class="fact"><b>${pct(f1)}</b><span>F1 score</span></div></div>
+      <table class="cm"><tr><th></th><th>Predicted clean</th><th>Predicted dirty</th></tr>
+        <tr><th>Actually clean</th><td>${tn}</td><td>${fp}</td></tr><tr><th>Actually dirty</th><td>${fn}</td><td>${tp}</td></tr></table><br>
+      <div class="grid">${out.map(o => `<div class="tile" title="probability dirty ${o.p.toFixed(2)}"><img src="/dataset/${esc(o.path)}" alt="" loading="lazy">
+        <span class="tag ${o.pred}">${o.pred} ${Math.round((o.pred === "dirty" ? o.p : 1 - o.p) * 100)}%</span><span class="mark ${o.pred === o.label ? "ok" : "no"}">${o.pred === o.label ? "✓" : "✗"}</span></div>`).join("")}</div>`;
+    $("runTest").disabled = false; $("runTest").textContent = "Run again";
+  };
+
+  $("ownFile").onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    $("tryOut").hidden = false; $("tryImg").src = URL.createObjectURL(f);
+    $("tryVerdict").textContent = "Checking…"; $("tryNote").textContent = "";
+    try {
+      const img = await loadImg($("tryImg").src);
+      const p = await window.CityEyeModel.predict(img);
+      $("tryVerdict").textContent = p >= 0.5 ? `Littered (${Math.round(p * 100)}%)` : `Clean (${Math.round((1 - p) * 100)}%)`;
+      $("tryVerdict").style.color = p >= 0.5 ? "var(--garbage)" : "var(--sign)";
+      $("tryNote").textContent = "Computed on this device with the trained model. Nothing was uploaded.";
+    } catch (err){ $("tryVerdict").textContent = "Could not run the model"; $("tryNote").textContent = err.message; }
+  };
+})();
+</script>
+</body>
+</html>

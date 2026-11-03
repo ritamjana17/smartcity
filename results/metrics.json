@@ -1,0 +1,92 @@
+{
+  "dataset": {
+    "name": "Clean/Dirty Road Classification",
+    "kaggle": "faizalkarim/cleandirty-road-classification",
+    "images": 231,
+    "per_class": {
+      "dirty": 120,
+      "clean": 111
+    },
+    "split": {
+      "train": {
+        "dirty": 84,
+        "clean": 77
+      },
+      "val": {
+        "dirty": 18,
+        "clean": 17
+      },
+      "test": {
+        "dirty": 18,
+        "clean": 17
+      }
+    },
+    "duplicates_removed": 14
+  },
+  "method": {
+    "feature_extractor": "MobileNetV2 1.0 224 (ImageNet) feature vector",
+    "features": 1280,
+    "classifier": "Logistic regression",
+    "best_C": 0.01,
+    "augmentation": "horizontal flip",
+    "cv_folds": 5,
+    "cv_accuracy_mean": 0.975,
+    "cv_accuracy_std": 0.0364,
+    "seed": 42
+  },
+  "results": {
+    "train": {
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "confusion_matrix": [
+        [
+          77,
+          0
+        ],
+        [
+          0,
+          84
+        ]
+      ]
+    },
+    "val": {
+      "accuracy": 0.9714,
+      "precision": 0.9474,
+      "recall": 1.0,
+      "f1": 0.973,
+      "roc_auc": 1.0,
+      "confusion_matrix": [
+        [
+          16,
+          1
+        ],
+        [
+          0,
+          18
+        ]
+      ]
+    },
+    "test": {
+      "accuracy": 0.9714,
+      "precision": 1.0,
+      "recall": 0.9444,
+      "f1": 0.9714,
+      "roc_auc": 0.9967,
+      "confusion_matrix": [
+        [
+          17,
+          0
+        ],
+        [
+          1,
+          17
+        ]
+      ]
+    }
+  },
+  "gemini": null,
+  "created": "2026-11-03T02:03:57Z"
+}
